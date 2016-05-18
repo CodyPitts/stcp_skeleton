@@ -33,6 +33,7 @@ typedef struct
     tcp_seq initial_sequence_num;
 
     /* any other connection-wide global variables go here */
+	const tcp_seq byteWindow = 3072;
 } context_t;
 
 
@@ -60,6 +61,60 @@ void transport_init(mysocket_t sd, bool_t is_active)
      * if connection fails; to do so, just set errno appropriately (e.g. to
      * ECONNREFUSED, etc.) before calling the function.
      */
+
+	/* 
+		if !is_active
+			Wait for 1st SYN packet
+		if is_active
+			Set th_ack to next sequence number
+			Set TH_SYN flag
+	*/
+	if (is_active) {
+		// creating SYN header
+		tcphdr *synhdr;
+		synhdr = (tcphdr *)calloc(1, sizeof(tcphdr));
+		assert(synhdr);
+		// Setting flags in header
+		synhdr->th_seq = ctx->initial_sequence_num;
+		synhdr->th_ack = synhdr->th_seq++;
+		synhdr->th_flags = synhdr->TH_SYN;
+		synhdr->th_win = th_ack + ctx->byteWindow - 1;
+		// First handshake
+		// maybe synhdr->th_win instead of sizeof(...)
+		if ((ssize_t bytSent = stcp_network_send(sd, synhdr, sizeof(tcphdr))) == -1){
+			//close_connection();
+		}
+		// Recieving from network requires setting the correct recv window
+		if ((ssize_t bytRecv = stcp_network_recv(sd, (void*)buffer, ctx->initial_sequence_num + byteWindow - 1))) == -1){
+			//close_connection();
+		}
+		// See if packet recv is the SYN_ACK packet
+		// Bitwise and to check for but the SYN flag and ACK flag
+		if (buffer->th_flags == TH_SYN & TH_ACK){
+			// CHeck to see if peer's ack seq# is + 1 our SYN's seq#
+			if (buffer->th_ack == synhdr->th_seq + 1){
+				// creating ACK header for last handshake
+				tcphdr *ackhdr;
+				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+				assert(ackhdr);
+				ackhdr->th_seq = buffer->th_seq+1;
+				ackhdr->th_ack = ackhdr->th_seq++;
+				ackhdr->th_flags = ackhdr->TH_SYN;
+				ackhdr->th_win = th_seq + ctx->byteWindow - 1;
+				// Send ACK for peer's SYN
+				if ((ssize_t bytSent = stcp_network_send(sd, ackhdrhdr, sizeof(tcphdr))) == -1){
+					//close_connection();
+				}
+			}
+		}
+
+	} else {
+		if ((ssize_t bytSent = stcp_app_recv(sd, ctx, ctx->initial_sequence_num + byteWindow - 1)) == -1){
+			//close_connection();	
+		}
+		is_active = true;
+	}
+
     ctx->connection_state = CSTATE_ESTABLISHED;
     stcp_unblock_application(sd);
 
@@ -79,8 +134,10 @@ static void generate_initial_seq_num(context_t *ctx)
     /* please don't change this! */
     ctx->initial_sequence_num = 1;
 #else
-    /* you have to fill this up */
-    /*ctx->initial_sequence_num =;*/
+/* you have to fill this up */
+    /*ctx->initial_sequence_num = RAND_NUM;*/
+	srand(time(NULL));
+	ctx->initial_sequence_num = rand() % 255;
 #endif
 }
 
