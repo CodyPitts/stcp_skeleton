@@ -21,7 +21,7 @@
 #include "transport.h"
 
 
-enum { CSTATE_ESTABLISHED };    /* you should have more states */
+enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
 
 
 /* this structure is global to a mysocket descriptor */
@@ -69,6 +69,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			Set th_ack to next sequence number
 			Set TH_SYN flag
 	*/
+	ctx -> connection_state = CSTATE_HANDSHAKING;
 	if (is_active) {
 		// creating SYN header
 		tcphdr *synhdr;
@@ -109,9 +110,14 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		}
 
 	} else {
-		if ((ssize_t bytSent = stcp_app_recv(sd, ctx, ctx->initial_sequence_num + byteWindow - 1)) == -1){
+		if ((ssize_t bytRecv = stcp_app_recv(sd, ctx, ctx->initial_sequence_num + byteWindow - 1)) == -1){
 			//close_connection();	
 		}
+		//else if something received, check if syn, else close
+		//if syn
+		//send syn ack
+		//wait on ack
+
 		is_active = true;
 	}
 
