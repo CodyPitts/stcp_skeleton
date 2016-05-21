@@ -90,7 +90,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			//close_connection();
 		}
 		// See if packet recv is the SYN_ACK packet
-		// Bitwise and to check for but the SYN flag and ACK flag
+		// Bitwise and to check for both the SYN flag and ACK flag
 		if (buffer->th_flags == TH_SYN & TH_ACK){
 			// CHeck to see if peer's ack seq# is + 1 our SYN's seq#
 			if (buffer->th_ack == synhdr->th_seq + 1){
@@ -102,11 +102,22 @@ void transport_init(mysocket_t sd, bool_t is_active)
 				ackhdr->th_ack = ackhdr->th_seq++;
 				ackhdr->th_flags = ackhdr->TH_SYN;
 				ackhdr->th_win = th_seq + ctx->byteWindow - 1;
-				// Send ACK for peer's SYN
 				if ((ssize_t bytSent = stcp_network_send(sd, ackhdrhdr, sizeof(tcphdr))) == -1){
 					//close_connection();
 				}
 			}
+		}
+
+		//simultaneous syns sent
+		else if(buffer->flags == TH_SYN)
+		{
+			//send SYN ACK, with our previous SEQ number, and their SEQ + 1
+			//Wait on SYN ACK with our SEQ number +1 and their SEQ number again
+		}
+		//wrong flags
+		else
+		{
+			//close_connection();
 		}
 
 	} else {
