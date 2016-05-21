@@ -70,6 +70,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			Set TH_SYN flag
 	*/
 	ctx -> connection_state = CSTATE_HANDSHAKING;
+
+	//KEEP TRACK OF ACK AND SEQ #s
 	if (is_active) {
 		// creating SYN header
 		tcphdr *synhdr;
