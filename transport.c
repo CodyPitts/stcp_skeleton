@@ -198,6 +198,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	event = stcp_wait_for_event(sd, 0, NULL);
 	
 	/* check whether it was the network, app, or a close request */
+	/*********************************APP_DATA***********************************/
 	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
@@ -229,6 +230,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		}
 
 	}
+	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
 	if ((event & NETWORK_DATA) || ((event & ANY_EVENT) == 3 | 6 | 7))
 	{
@@ -237,6 +239,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		{
 			// close_connection();
 		}
+		// crazy flag check or not
 		if (ctx->hdr_buffer->th_flags )
 		{
 			// flag stuff
@@ -249,10 +252,45 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		// Pass data to application layer
 		stcp_app_send(sd, ctx->data_buffer, sizeof(ctx->data_buffer));
 	}
+	/***********************************APP_CLOSE_REQUESTED*************************/
 	// handle 4,5,6,7
 	if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == 5 | 6 | 7))
 	{
-		// Close it down
+		// Send FIN packet to network layer
+		tcphdr* finhdr;
+		finhdr = (tcphdr*)calloc(1, sizeof(tcphdr));
+		assert(finhdr);
+		finhdr->th_seq = curr_sequence_num;
+		finhdr->th_flags = TH_FIN;
+		// window stuff
+		if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1)
+		{
+			//close_connection();
+		}
+		// Recv ACK for sent FIN packet
+		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
+		{
+			//close_connection();
+		}
+		// Check ACK
+		if (ctx->hdr_buffer->th_flags & TH_FIN)
+		{
+			// yay ACK flag recieve FIN
+			// add timeout stuff
+			if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
+			{
+				//close_connection();
+			}
+			tcphdr *ackhdr;
+			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+			assert(ackhdr);
+			ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
+			ackhdr->th_flags = TH_ACK;
+			if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
+				//close_connection();
+			}
+		}
+		// Close down the application layer
 		stcp_fin_recieved(sd);
 	}
 	/* etc. */
