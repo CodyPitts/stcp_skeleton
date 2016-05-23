@@ -35,7 +35,8 @@ typedef struct
   
   /* any other connection-wide global variables go here */
   tcp_seq byteWindow = 3072;
-  tcphdr* buffer;
+  tcphdr* hdr_buffer;
+  char* data_buffer;
   
 } context_t;
 
@@ -53,8 +54,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
   context_t *ctx;
   ctx = (context_t *) calloc(1, sizeof(context_t));
   assert(ctx);
-  ctx->buffer = (tcphdr*)calloc(1,sizeof(tcphdr));
-  assert(ctx->buffer);
+  ctx->hdr_buffer = (tcphdr*)calloc(1,sizeof(tcphdr));
+  assert(ctx->hdr_buffer);
 
   generate_initial_seq_num(ctx);
   ctx->curr_sequence_num = ctx->initial_sequence_num;
@@ -82,21 +83,21 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  //close_connection();
 	}
 	// Recieving from network requires setting the correct recv window
-	if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr)))
+	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
 	  //close_connection();
 	}
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
-	if (ctx->buffer->th_flags & (TH_SYN | TH_ACK)){
+	if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
 	  // Check to see if peer's ack seq# is + 1 our SYN's seq#
-	  if (ctx->buffer->th_ack == synhdr->th_seq + 1){
+	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
 		ctx->curr_sequence_num++;
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 		assert(ackhdr);
-		ackhdr->th_ack = ctx->buffer->th_seq+1;
+		ackhdr->th_ack = ctx->hdr_buffer->th_seq+1;
 		ackhdr->th_flags = TH_ACK;
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
 		  //close_connection();
@@ -104,14 +105,14 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  }
 	}
 	//simultaneous syns sent
-	else if(ctx->buffer->th_flags & TH_SYN) {
+	else if(ctx->hdr_buffer->th_flags & TH_SYN) {
 	  //send SYN ACK, with our previous SEQ number, and their SEQ + 1
 	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 	  tcphdr *synack;
 	  synack = (tcphdr*)calloc(1, sizeof(tcphdr));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ctx->buffer->th_seq++;
+	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		//close_connection();
 	  }
@@ -121,27 +122,27 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  //close_connection();
 	}
   } else {
-	if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr)))
+	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
 	  //close_connection();
 	}
-	if (ctx->buffer->th_flags & TH_SYN) {
+	if (ctx->hdr_buffer->th_flags & TH_SYN) {
 	  //send SYN ACK, with our previous SEQ number, and their SEQ + 1
 	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 	  tcphdr *synack;
 	  synack = (tcphdr*)calloc(1, sizeof(synack));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ctx->buffer->th_seq++;
+	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		//close_connection();
 	  }
-	  if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr)))
+	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		  == -1){
 		//close_connection();
 	  }
-	  if (!(ctx->buffer->th_flags & TH_ACK)
-		  || !(ctx->buffer->th_seq == ctx->curr_sequence_num+1)){
+	  if (!(ctx->hdr_buffer->th_flags & TH_ACK)
+		  || !(ctx->hdr_buffer->th_seq == ctx->curr_sequence_num+1)){
 		// close_connection();
 	  }
 	}
@@ -185,6 +186,9 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 {
   assert(ctx);
   assert(!ctx->done);
+  assert(ctx->hdr_buffer);
+  ctx->data_buffer = (char*)calloc(1, sizeof(char*));
+  asser(ctx - data_buffer);
   
   while (!ctx->done){
 	unsigned int event;
@@ -194,19 +198,62 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	event = stcp_wait_for_event(sd, 0, NULL);
 	
 	/* check whether it was the network, app, or a close request */
-	if (event & APP_DATA){	// handle event 1,3,5,7
+	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
+		//  read data with stcp_app_recv(sd,dst,size) into dst as a char*
+		if (stcp_app_recv(sd, data_buffer, 3072) == -1)
+		{
+			//close_connection();
+		}
+		// Create packet with correct seq# and sending window
+		tcphdr* datahdr;
+		datahdr = (tcphdr*)calloc(1, sizeof(tcphdr));
+		assert(datahdr);
+		ctx->datahdr->th_seq = curr_sequence_num;
+		//datahdr->th_win = 3072-sizeof(data_buffer)-1;   // Sliding window calculations
+		// Send to network layer using stcp_network_send(sd, src, size, ...) as two packet(hdr, data)
+		if (stcp_network_send(sd, datahdr, sizeof(datahdr), data_buffer, sizeof(data_buffer), NULL) == -1)
+		{
+			// 	close_connection();
+		}
+		// Recv ACK
+		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
+		{
+			//close_connection();
+		}
+		// Check for ACK
+		if (!(ctx->hdr_buffer->th_flags & TH_ACK))
+		{
+			// No ACK
+		}
+
 	}
 	// handle 2,3,6,7
-	if (event & NETWORK_DATA)
+	if ((event & NETWORK_DATA) || ((event & ANY_EVENT) == 3 | 6 | 7))
 	{
-		
+		// Read in packet hdr from network
+		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
+		{
+			// close_connection();
+		}
+		if (ctx->hdr_buffer->th_flags )
+		{
+			// flag stuff
+		}
+		// Read in data from network
+		if (stp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1)
+		{
+			//close_connection();
+		}
+		// Pass data to application layer
+		stcp_app_send(sd, ctx->data_buffer, sizeof(ctx->data_buffer));
 	}
 	// handle 4,5,6,7
-	if (event & APP_CLOSE_REQUESTED)
+	if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == 5 | 6 | 7))
 	{
-		
+		// Close it down
+		stcp_fin_recieved(sd);
 	}
 	/* etc. */
   }
