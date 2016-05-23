@@ -82,12 +82,12 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			//close_connection();
 		}
 		// Recieving from network requires setting the correct recv window
-		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, ctx->initial_sequence_num + byteWindow - 1))) == -1){
+		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 			//close_connection();
 		}
 		// See if packet recv is the SYN_ACK packet
 		// Bitwise and to check for both the SYN flag and ACK flag
-		if (ctx->buffer->th_flags & TH_SYN & TH_ACK){
+		if (ctx->buffer->th_flags & (TH_SYN | TH_ACK)){
 			// Check to see if peer's ack seq# is + 1 our SYN's seq#
 			if (ctx->buffer->th_ack == synhdr->th_seq + 1){
 				curr_sequence_num++;
@@ -105,11 +105,11 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			}
 		}
 		//simultaneous syns sent
-		else if(ctx->buffer->flags & TH_SYN & !TH_ACK) {
+		else if(ctx->buffer->th_flags & TH_SYN) {
 			//send SYN ACK, with our previous SEQ number, and their SEQ + 1
 			//Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 			tcphdr *synack;
-			synack = (tcphdr*)calloc(1, sizeof(synack));
+			synack = (tcphdr*)calloc(1, sizeof(tcphdr));
 			assert(synack);
 			synack->th_seq = curr_sequence_num;
 			synack->th_ack = ctx->buffer->th_seq++;
@@ -122,11 +122,10 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			//close_connection();
 		}
 	} else {
-		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, 
-			ctx->initial_sequence_num + byteWindow - 1))) == -1){
+		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 			//close_connection();
 		}
-		if (ctx->buffer->flags & TH_SYN & !TH_ACK) {
+		if (ctx->buffer->th_flags & TH_SYN) {
 			//send SYN ACK, with our previous SEQ number, and their SEQ + 1
 			//Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 			tcphdr *synack;
@@ -137,7 +136,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			if ((ssize_t status = stcp_network_send(sd, synack, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
-			if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, ctx->initial_sequence_num + byteWindow - 1))) == -1){
+			if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
 			if ((ctx->buffer->flags & TH_ACK & !TH_SYN) && (ctx->buffer->th_seq == curr_sequence_num+1)){
