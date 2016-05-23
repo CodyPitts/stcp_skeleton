@@ -194,11 +194,20 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	event = stcp_wait_for_event(sd, 0, NULL);
 	
 	/* check whether it was the network, app, or a close request */
-	if (event & APP_DATA){
+	if (event & APP_DATA){	// handle event 1,3,5,7
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
 	}
-	
+	// handle 2,3,6,7
+	if (event & NETWORK_DATA)
+	{
+		
+	}
+	// handle 4,5,6,7
+	if (event & APP_CLOSE_REQUESTED)
+	{
+		
+	}
 	/* etc. */
   }
 }
