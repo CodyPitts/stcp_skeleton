@@ -34,7 +34,7 @@ typedef struct
 	tcp_seq curr_sequence_num;
 
     /* any other connection-wide global variables go here */
-	const tcp_seq byteWindow = 3072;
+	tcp_seq byteWindow = 3072;
 	tcphdr* buffer;
 } context_t;
 
@@ -75,14 +75,15 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		synhdr->th_seq = ctx->curr_sequence_num;
 		//synhdr->th_ack = synhdr->th_seq++;
 		synhdr->th_flags = TH_SYN;
-		//synhdr->th_win = synhdr->th_ack + ctx->byteWindow - 1;
+		// synhdr->th_win = synhdr->th_ack + ctx->byteWindow - 1;
 		// First handshake
 		// maybe synhdr->th_win instead of sizeof(...)
-		if ((ssize_t status = stcp_network_send(sd, synhdr, sizeof(tcphdr))) == -1){
+		if ((stcp_network_send(sd, synhdr, sizeof(tcphdr))) == -1){
 			//close_connection();
 		}
+		printf("HERE");
 		// Recieving from network requires setting the correct recv window
-		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
+		if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 			//close_connection();
 		}
 		// See if packet recv is the SYN_ACK packet
@@ -90,16 +91,16 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		if (ctx->buffer->th_flags & (TH_SYN | TH_ACK)){
 			// Check to see if peer's ack seq# is + 1 our SYN's seq#
 			if (ctx->buffer->th_ack == synhdr->th_seq + 1){
-				curr_sequence_num++;
+				ctx->curr_sequence_num++;
 				// creating ACK header for last handshake
 				tcphdr *ackhdr;
 				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 				assert(ackhdr);
 				//ackhdr->th_seq = ctx->buffer->th_seq+1;
 				ackhdr->th_ack = ctx->buffer->th_seq;
-				ackhdr->th_flags = ackhdr->TH_SYN;
+				ackhdr->th_flags = TH_SYN;
 				//ackhdr->th_win = ackhdr->th_seq + ctx->byteWindow - 1;
-				if ((ssize_t status = stcp_network_send(sd, ackhdr, sizeof(tcphdr))) == -1){
+				if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr))) == -1){
 					//close_connection();
 				}
 			}
@@ -111,9 +112,9 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			tcphdr *synack;
 			synack = (tcphdr*)calloc(1, sizeof(tcphdr));
 			assert(synack);
-			synack->th_seq = curr_sequence_num;
+			synack->th_seq = ctx->curr_sequence_num;
 			synack->th_ack = ctx->buffer->th_seq++;
-			if ((ssize_t status = stcp_network_send(sd, synack, sizeof(tcphdr))) == -1){
+			if ((stcp_network_send(sd, synack, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
 		}
@@ -122,7 +123,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			//close_connection();
 		}
 	} else {
-		if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
+		if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 			//close_connection();
 		}
 		if (ctx->buffer->th_flags & TH_SYN) {
@@ -131,15 +132,16 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			tcphdr *synack;
 			synack = (tcphdr*)calloc(1, sizeof(synack));
 			assert(synack);
-			synack->th_seq = curr_sequence_num;
+			synack->th_seq = ctx->curr_sequence_num;
 			synack->th_ack = ctx->buffer->th_seq++;
-			if ((ssize_t status = stcp_network_send(sd, synack, sizeof(tcphdr))) == -1){
+			if ((stcp_network_send(sd, synack, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
-			if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
+			if ((stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
-			if (!(ctx->buffer->flags & TH_ACK) || !(ctx->buffer->th_seq == curr_sequence_num+1)){
+			if (!(ctx->buffer->th_flags & TH_ACK)
+				|| !(ctx->buffer->th_seq == ctx->curr_sequence_num+1)){
 				// close_connection();
 			}
 		}
