@@ -139,8 +139,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			if ((ssize_t status = stcp_network_recv(sd, (void*)ctx->buffer, sizeof(tcphdr))) == -1){
 				//close_connection();
 			}
-			if ((ctx->buffer->flags & TH_ACK & !TH_SYN) && (ctx->buffer->th_seq == curr_sequence_num+1)){
-				// Got Ack					
+			if (!(ctx->buffer->flags & TH_ACK) || !(ctx->buffer->th_seq == curr_sequence_num+1)){
+				// close_connection();
 			}
 		}
 		//is_active = true;
