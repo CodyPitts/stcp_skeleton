@@ -267,16 +267,25 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		{
 			//close_connection();
 		}
+
+		//start a timer for timeout on ack received
+		//gettimeofday(2)
+		//somehow check for timeout while waiting on network recv
+		//if timeout stcp_fin_received
+
 		// Recv ACK for sent FIN packet
 		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
 		{
 			//close_connection();
 		}
-		// Check ACK
+
+		// Check ACK, if incorrect, timeout
+		//otherwise, wait on all data, until FIN
+		//while loop, waiting for data/FIN
+		//if nothing, time out
 		if (ctx->hdr_buffer->th_flags & TH_FIN)
 		{
 			// yay ACK flag recieve FIN
-			// add timeout stuff
 			if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1)
 			{
 				//close_connection();
