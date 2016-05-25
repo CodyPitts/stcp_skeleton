@@ -91,7 +91,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	}
 	ctx->last_byte_sent = sizeof(tcphdr);
 	// Recieving from network requires setting the correct recv window
-	//HTONS NTOHS
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, recv_win))
 		== -1){
 		our_dprintf("Error: stcp_network_recv()");
@@ -114,7 +113,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 
 		ctx->send_win = min(congestion_win, recv_win);
 		ackhdr->th_win = htons(send_win);
-		//Htons ntohs
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
 			our_dprintf("Error: stcp_network_send()");
 		  exit(-1);
@@ -131,7 +129,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack->th_seq = ctx->curr_sequence_num;
 	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  ctx->curr_ack_num = synack->th_ack;
-	  //htons ntohs
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		  our_dprintf("Error: stcp_network_send()");
 		exit(-1);
@@ -144,7 +141,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	}
   } else {
 	  // Passively waiting for syn
-	  //htons ntohs
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
 		our_dprintf("Error: stcp_network_recv()");
@@ -164,7 +160,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		  our_dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  //htons ntohs
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		  == -1){
 		  our_dprintf("Error: stcp_network_recv()");
@@ -225,7 +220,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
   assert(!ctx->done);
   assert(ctx->hdr_buffer);
   ctx->data_buffer = (char*)calloc(1, sizeof(char*));
-  asser(ctx - data_buffer);
+  assert(ctx->data_buffer);
   
   while (!ctx->done){
 	unsigned int event;
