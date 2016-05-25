@@ -132,7 +132,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  // Sliding window calculation maybe
 	  ctx->curr_ack_num = synack->th_ack;
 	  ctx->send_win = min(congestion_win, recv_win) + ctx->last_byte_sent - ctx->last_byte_ack + 1;
-	  ackhdr->th_win = htons(bit_win);
+	  synack->th_win = htons(bit_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
 		our_dprintf("Error: stcp_network_send()");
 		exit(-1);
@@ -239,6 +239,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	/* XXX: you will need to change some of these arguments! */
 	event = stcp_wait_for_event(sd, 0, NULL);
 	
+	if (event & TIMEOUT)
+	{
+		dprintf("Error: TIMEOUT");
+		exit(-1);
+	}
 	/* check whether it was the network, app, or a close request */
 	/*********************************APP_DATA***********************************/
 	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7
@@ -340,40 +345,50 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
 		//if timeout stcp_fin_received
-		// Recv ACK for sent FIN packet
-		//After we receive we want to ntohs
-		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-			our_dprintf("Error: stcp_network_recv()");
-			exit(-1);
-		}
-		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-		// Check ACK, if incorrect, timeout
-		//otherwise, wait on all data, until FIN
-		//while loop, waiting for data/FIN
-		//if nothing, time out		
-		if (ctx->hdr_buffer->th_flags & TH_FIN){
-			// yay ACK flag recieve FIN
-			// add timeout stuff
-			//Receive so ntohs
+		event = stcp_wait_for_event(sd, 0, 5);
+
+		if (event & NETWORK_DATA){
+			// Recv ACK for sent FIN packet
+			//After we receive we want to ntohs
 			if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
 				our_dprintf("Error: stcp_network_recv()");
 				exit(-1);
 			}
 			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-			tcphdr *ackhdr;
-			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
-			assert(ackhdr);
-			ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
-			ackhdr->th_flags = TH_ACK;
-			//Send
-			if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
-				our_dprintf("Error: stcp_network_send()");
-				exit(-1);
+			// Check ACK, if incorrect, timeout
+			//otherwise, wait on all data, until FIN
+			//while loop, waiting for data/FIN
+			//if nothing, time out		
+			if (ctx->hdr_buffer->th_flags & TH_FIN){
+				// yay ACK flag recieve FIN
+				// add timeout stuff
+				//Receive so ntohs
+				if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
+					our_dprintf("Error: stcp_network_recv()");
+					exit(-1);
+				}
+				ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+				tcphdr *ackhdr;
+				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+				assert(ackhdr);
+				ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
+				ackhdr->th_flags = TH_ACK;
+				//Send
+				if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
+					our_dprintf("Error: stcp_network_send()");
+					exit(-1);
+				}
 			}
+		}
+		else if (event & TIMEOUT)
+		{
+			dprintf("Error: TIMEOUT");
+			exit(-1);
 		}
 		// Close down the application layer
 		stcp_fin_recieved(sd);
 	}
+	/*********************************TIMEOUT******************************************/
 	/* etc. */
   }
 }
