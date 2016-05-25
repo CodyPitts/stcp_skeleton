@@ -43,7 +43,6 @@ typedef struct
   char* data_buffer;
 } context_t;
 
-
 static void generate_initial_seq_num(context_t *ctx);
 static void control_loop(mysocket_t sd, context_t *ctx);
 
@@ -248,8 +247,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	  /* see stcp_app_recv() */
 		//read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		//  read data with stcp_app_recv(sd,dst,size) into dst as a char*
-		if (stcp_app_recv(sd, ctx->data_buffer, ctx->last_byte_sent - 1) == -1){
-			dprintf("Error: stcp_app_recv()");
+		// Sliding window calculations
+		int max_send_window = min(ctx->hdr_buffer->th_win,congestion_win);
+		int data_in_flight = ctx->last_byte_sent - ctx->last_byte_ack);
+		if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == -1){
+			our_dprintf("Error: stcp_app_recv()");
 			exit(-1);
 		}
 		// Create packet with correct seq# and sending window
@@ -257,14 +259,15 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		datahdr = (tcphdr*)calloc(1, sizeof(tcphdr));
 		assert(datahdr);
 		ctx->datahdr->th_seq = curr_sequence_num;
-		//datahdr->th_win = 3072-sizeof(data_buffer)-1;   // Sliding window calculations
 		// Send to network layer using stcp_network_send(sd, src, size, ...) as two packet(hdr, data)
 		//Here need to convert multi byte data being sent with htons (dbuffer)
+
+		ctx->datahdr->th_win = htons(bit_win);   
 		if (stcp_network_send(sd, datahdr, sizeof(datahdr), data_buffer, sizeof(data_buffer), NULL) == -1){
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		ctx->last_byte_sent = sizeof(datahdr)+sizeof(data_buffer);
+		ctx->last_byte_sent = curr_sequence_num+sizeof(datahdr)+sizeof(data_buffer);
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
