@@ -19,10 +19,7 @@
 #include "mysock.h"
 #include "stcp_api.h"
 #include "transport.h"
-//uint32_t htonl(uint32_t hostlong);
-//uint16_t htons(uint16_t hostshort);
-//uint32_t ntohl(uint32_t netlong);
-//uint16_t ntohs(uint16_t netshort);
+
 
 
 enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
@@ -89,7 +86,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	// First handshake
 	// maybe synhdr->th_win instead of sizeof(...)
 	if ((stcp_network_send(sd, synhdr, sizeof(tcphdr),NULL)) == -1){
-	//if(stcp_network_send(sd, synhdr, sizeof(tcphdr),nULL)
 		our_dprintf("Error: stcp_network_send()");	
 	  exit(-1);
 	}
