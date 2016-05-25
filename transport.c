@@ -21,6 +21,7 @@
 #include "transport.h"
 
 enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
+#define bit_win 3072
 
 /* this structure is global to a mysocket descriptor */
 typedef struct
@@ -33,8 +34,7 @@ typedef struct
   tcp_seq curr_ack_num;
   
   /* any other connection-wide global variables go here */
-#define bit_win = 3072;
-  tcp_seq congestion_win = bit_win, recv_win = bit_win, send_win = bit_win;
+  tcp_seq congestion_win, recv_win, send_win;
   int* last_byte_sent;
   int* last_byte_ack;
 
@@ -58,6 +58,9 @@ void transport_init(mysocket_t sd, bool_t is_active)
   assert(ctx);
   ctx->hdr_buffer = (tcphdr*)calloc(1,sizeof(tcphdr));
   assert(ctx->hdr_buffer);
+  ctx->congestion_win = bit_win;
+  ctx->recv_win = bit_win;
+  ctx->send_win = bit_win;
 
   generate_initial_seq_num(ctx);
   ctx->curr_sequence_num = ctx->initial_sequence_num;
@@ -208,6 +211,7 @@ static void generate_initial_seq_num(context_t *ctx)
   /*ctx->initial_sequence_num = RAND_NUM;*/
   srand(time(NULL));
   ctx->initial_sequence_num = rand() % 255;
+  ctx->curr_seqence_num = ctx->initial_sequence_num;
   ctx->last_byte_sent = ctx->initial_sequence_num;
   ctx->last_byte_ack = ctx->initial_sequence_num;
 #endif
@@ -268,31 +272,46 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		// Read in packet hdr from network
 		//We receive the packet but it probably needs to go to ntohs
 		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-			our_dprintf("Error: stcp_network_send()");
+			our_dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
 		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-		// ack flag maybe data
-		if (ctx->hdr_buffer->th_flags & TH_ACK)
-		{
-			// flag stuff
+		//*******************RECIEVED AN ACK PACKET **********************************
+		if (ctx->hdr_buffer->th_flags & TH_ACK){
 			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
+				our_dprintf("Error: stcp_network_recv()");
+				exit(-1);
+			}
+			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+		}
+		//****************RECIEVED A FIN PACKET *******************************************
+		else if (ctx->hdr_buffer->th_flags & TH_FIN)
+		{
+			// Send FIN ACK packet to network layer
+			tcphdr* finack;
+			finack = (tcphdr*)calloc(1, sizeof(tcphdr));
+			assert(finack);
+			finack->th_seq = curr_sequence_num;
+			finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++;
+			finack->th_flags = TH_FIN & TH_ACK;
+			// window stuff
+			//Since we're sending to the network we'll need to htons
+			if (stcp_network_send(sd, finack, sizeof(finack), NULL) == -1){
 				our_dprintf("Error: stcp_network_send()");
 				exit(-1);
 			}
+			ctx->last_byte_sent = sizeof(finack);
+			stcp_fin_recieved(sd);
 		}
-		// no flags with data
-		if (ctx->hdr_buffer->th_flags)
-		{
+		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
+		else if (!ctx->hdr_buffer->th_flags){
 			//recv data
+			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
+				our_dprintf("Error: stcp_network_recv()");
+				exit(-1);
+			}
+			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 
-		}
-		// Read in data from network
-		//htons ntohs
-		//Once again this probably needs to go to ntohs after receiving
-		if (stp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
-			our_dprintf("Error: stcp_network_recv()");
-			exit(-1);
 		}
 
 		// Pass data to application layer
