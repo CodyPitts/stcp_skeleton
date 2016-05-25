@@ -118,7 +118,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
-		ctx->last_byte_sent = sizeof(tcphdr) + ctx->curr_sequence_num;
+		*(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num;
 	  }
 	}
 	//simultaneous syns sent
@@ -164,13 +164,13 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
 	  ctx->recv_win = bit_win + ctx->last_byte_ack - ctx->last_byte_sent + 1;
-	  ctx->send_win = min(congestion_win, recv_win);
-	  ackhdr->th_win = htons(send_win);
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win);
+	  synack->th_win = htons(ctx->send_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  ctx->last_byte_sent = sizeof(tcphdr);
+	  *(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num;
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		  == -1){
 		dprintf("Error: stcp_network_recv()");
@@ -183,7 +183,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		dprintf("Error: Wrong ACK");
 		exit(-1);
 	  } else {
-		  ctx->curr_ack_num = ntohs(hdr_buffer->th_seq)+1;
+		  ctx->curr_ack_num = ntohs(ctx->hdr_buffer->th_seq)+1;
 	  }
 	}
   }
@@ -211,9 +211,9 @@ static void generate_initial_seq_num(context_t *ctx)
   /*ctx->initial_sequence_num = RAND_NUM;*/
   srand(time(NULL));
   ctx->initial_sequence_num = rand() % 255;
-  ctx->curr_seqence_num = ctx->initial_sequence_num;
-  ctx->last_byte_sent = ctx->initial_sequence_num;
-  ctx->last_byte_ack = ctx->initial_sequence_num;
+  ctx->curr_sequence_num = ctx->initial_sequence_num;
+  *(ctx->last_byte_sent) = ctx->initial_sequence_num;
+  *(ctx->last_byte_ack) = ctx->initial_sequence_num;
 #endif
 }
 
@@ -242,32 +242,32 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	
 	/* check whether it was the network, app, or a close request */
 	/*********************************APP_DATA***********************************/
-	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7
+	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7 CODY: parenthesis issue? bitwise stuff
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
 		//read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		//  read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		// Sliding window calculations
-		int max_send_window = min(ctx->hdr_buffer->th_win,congestion_win);
-		int data_in_flight = ctx->last_byte_sent - ctx->last_byte_ack);
+		int max_send_window = std::min(ctx->hdr_buffer->th_win, ctx->congestion_win); //CODY: error: no matching function for call to 'min(uint16_t&, tcp_seq&)'
+		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
 		if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == -1){
-			our_dprintf("Error: stcp_app_recv()");
+			dprintf("Error: stcp_app_recv()");
 			exit(-1);
 		}
 		// Create packet with correct seq# and sending window
 		tcphdr* datahdr;
 		datahdr = (tcphdr*)calloc(1, sizeof(tcphdr));
 		assert(datahdr);
-		ctx->datahdr->th_seq = curr_sequence_num;
+		datahdr->th_seq = ctx->curr_sequence_num;
 		// Send to network layer using stcp_network_send(sd, src, size, ...) as two packet(hdr, data)
 		//Here need to convert multi byte data being sent with htons (dbuffer)
 
-		ctx->datahdr->th_win = htons(bit_win);   
-		if (stcp_network_send(sd, datahdr, sizeof(datahdr), data_buffer, sizeof(data_buffer), NULL) == -1){
+		datahdr->th_win = htons(bit_win);   
+		if (stcp_network_send(sd, datahdr, sizeof(datahdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){ //CODY: not sure of changes I made here
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		ctx->last_byte_sent = curr_sequence_num+sizeof(datahdr)+sizeof(data_buffer);
+		ctx->last_byte_sent = ctx->curr_sequence_num+sizeof(datahdr)+sizeof(*(ctx->data_buffer)); //CODY: rewrite this line
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
@@ -295,7 +295,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			tcphdr* finack;
 			finack = (tcphdr*)calloc(1, sizeof(tcphdr));
 			assert(finack);
-			finack->th_seq = curr_sequence_num;
+			finack->th_seq = ctx->curr_sequence_num;
 			finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++;
 			finack->th_flags = TH_FIN & TH_ACK;
 			// window stuff
@@ -304,7 +304,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				dprintf("Error: stcp_network_send()");
 				exit(-1);
 			}
-			ctx->last_byte_sent = sizeof(finack);
+			*(ctx->last_byte_sent) = sizeof(finack) + ctx->curr_sequence_num;
 			stcp_fin_recieved(sd);
 		}
 		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
@@ -337,7 +337,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		ctx->last_byte_sent = sizeof(finhdr);
+		*(ctx->last_byte_sent) = sizeof(finhdr);
 		//start a timer for timeout on ack received
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
@@ -377,7 +377,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		stcp_fin_recieved(sd);
 	}
 	/* etc. */
-  }
 }
 
 /**********************************************************************/
