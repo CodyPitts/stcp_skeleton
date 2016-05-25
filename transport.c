@@ -20,10 +20,7 @@
 #include "stcp_api.h"
 #include "transport.h"
 
-
-
 enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
-
 
 /* this structure is global to a mysocket descriptor */
 typedef struct
@@ -86,16 +83,17 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	// First handshake
 	// maybe synhdr->th_win instead of sizeof(...)
 	if ((stcp_network_send(sd, synhdr, sizeof(tcphdr),NULL)) == -1){
-		our_dprintf("Error: stcp_network_send()");	
+	  our_dprintf("Error: stcp_network_send()");	
 	  exit(-1);
 	}
 	ctx->last_byte_sent = sizeof(tcphdr);
 	// Recieving from network requires setting the correct recv window
-	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, recv_win))
+	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win+bit_win))
 		== -1){
-		our_dprintf("Error: stcp_network_recv()");
+	  our_dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
+	ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
 	if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
@@ -106,17 +104,18 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 		assert(ackhdr);
-		ackhdr->th_ack = ctx->hdr_buffer->th_seq+1;
+		ackhdr->th_ack = ntohs(ctx->hdr_buffer->th_seq)+1;
 		ctx->curr_ack_num = ackhdr->th_ack;
 		ackhdr->th_flags = TH_ACK;
 		ctx->last_byte_ack = ackhdr->th_ack;
-
-		ctx->send_win = min(congestion_win, recv_win);
-		ackhdr->th_win = htons(send_win);
+		// Sliding window calculation maybe
+		ctx->send_win = min(congestion_win, recv_win) + ctx->last_byte_sent - ctx->last_byte_ack + 1;
+		ackhdr->th_win = htons(bit_win);
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
-			our_dprintf("Error: stcp_network_send()");
+		  our_dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
+		ctx->last_byte_sent = sizeof(tcphdr);
 	  }
 	}
 	//simultaneous syns sent
@@ -127,25 +126,30 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack = (tcphdr*)calloc(1, sizeof(tcphdr));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ctx->hdr_buffer->th_seq++;
+	  synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)+1;
+	  // Sliding window calculation maybe
 	  ctx->curr_ack_num = synack->th_ack;
-	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
-		  our_dprintf("Error: stcp_network_send()");
+	  ctx->send_win = min(congestion_win, recv_win) + ctx->last_byte_sent - ctx->last_byte_ack + 1;
+	  ackhdr->th_win = htons(bit_win);
+	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
+		our_dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
+	  ctx->last_byte_sent = sizeof(tcphdr);
 	}
 	//wrong flags
 	else {
-		our_dprintf("Error: wrong flags");
+	  our_dprintf("Error: wrong flags");
 	  exit(-1);
 	}
   } else {
 	  // Passively waiting for syn
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
-		our_dprintf("Error: stcp_network_recv()");
+	  our_dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
+	ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 	if (ctx->hdr_buffer->th_flags & TH_SYN) {
 	  //send SYN ACK, with our previous SEQ number, and their SEQ + 1
 	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
@@ -153,27 +157,30 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack = (tcphdr*)calloc(1, sizeof(synack));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ctx->hdr_buffer->th_seq++;
+	  synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++;
+	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
-	  //htons ntohs
+	  ctx->recv_win = bit_win + ctx->last_byte_ack - ctx->last_byte_sent + 1;
+	  ctx->send_win = min(congestion_win, recv_win);
+	  ackhdr->th_win = htons(send_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
-		  our_dprintf("Error: stcp_network_send()");
+		our_dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
+	  ctx->last_byte_sent = sizeof(tcphdr);
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		  == -1){
-		  our_dprintf("Error: stcp_network_recv()");
+		our_dprintf("Error: stcp_network_recv()");
 		exit(-1);
 	  }
+	  ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 	  // Wait on ACK
 	  if (!(ctx->hdr_buffer->th_flags & TH_ACK)
 		  || !(ctx->hdr_buffer->th_seq == ctx->curr_sequence_num+1)){
-		  our_dprintf("Error: Wrong ACK");
+		our_dprintf("Error: Wrong ACK");
 		exit(-1);
-	  }
-	  else
-	  {
-		  ctx->curr_ack_num = hdr_buffer->th_seq++;
+	  } else {
+		  ctx->curr_ack_num = ntohs(hdr_buffer->th_seq)+1;
 	  }
 	}
   }
@@ -234,9 +241,9 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
-		//  read data with stcp_app_recv(sd,dst,size) into dst as a char*
+		//read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		//htons ntohs
-		if (stcp_app_recv(sd, data_buffer, 3072) == -1){
+		if (stcp_app_recv(sd, ctx->data_buffer, ctx->last_byte_sent-1) == -1){
 			our_dprintf("Error: stcp_app_recv()");
 			exit(-1);
 		}
@@ -252,16 +259,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			our_dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		// Recv ACK
-		//htons ntohs
-		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-			our_dprintf("Error: stcp_network_send()");
-			exit(-1);
-		}
-		// Check for ACK
-		if (!(ctx->hdr_buffer->th_flags & TH_ACK)){
-			// No ACK
-		}
+		ctx->last_byte_sent = sizeof(datahdr)+sizeof(data_buffer);
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
@@ -273,17 +271,29 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			our_dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		// crazy flag check or not
-		if (ctx->hdr_buffer->th_flags )
+		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+		// ack flag maybe data
+		if (ctx->hdr_buffer->th_flags & TH_ACK)
 		{
 			// flag stuff
+			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
+				our_dprintf("Error: stcp_network_send()");
+				exit(-1);
+			}
+		}
+		// no flags with data
+		if (ctx->hdr_buffer->th_flags)
+		{
+			//recv data
+
 		}
 		// Read in data from network
 		//htons ntohs
-		if (stp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
+		if (stp_network_recv(sd, ctx->data_buffer, ctx->recv_win) == -1){
 			our_dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
+
 		// Pass data to application layer
 		//htons ntohs
 		stcp_app_send(sd, ctx->data_buffer, sizeof(ctx->data_buffer));
@@ -304,6 +314,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			our_dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
+		ctx->last_byte_sent = sizeof(finhdr);
 		//start a timer for timeout on ack received
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
@@ -314,6 +325,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			our_dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
+		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 		// Check ACK, if incorrect, timeout
 		//otherwise, wait on all data, until FIN
 		//while loop, waiting for data/FIN
@@ -326,6 +338,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				our_dprintf("Error: stcp_network_recv()");
 				exit(-1);
 			}
+			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
 			tcphdr *ackhdr;
 			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 			assert(ackhdr);
