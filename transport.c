@@ -223,6 +223,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		exit(-1);
 	  } else {
 	  	*(ctx->last_byte_ack)  = ctx->hdr_buffer->th_ack-1;
+
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
 	  }
@@ -299,8 +300,9 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		//  read data with stcp_app_recv(sd,dst,size) into dst as a char*
 		// Sliding window calculations
-		int max_send_window = std::min(ctx->hdr_buffer->th_win, (uint16_t)ctx->congestion_win); //CODY: error: no matching function for call to 'min(uint16_t&, tcp_seq&)'
+		int max_send_window = std::min(ctx->their_recv_win, (uint16_t)ctx->congestion_win); //CODY: error: no matching function for call to 'min(uint16_t&, tcp_seq&)'
 		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
+		//get data from the app
 		if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == (size_t)-1){
 			dprintf("Error: stcp_app_recv()");
 			exit(-1);
@@ -313,12 +315,12 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		// Send to network layer using stcp_network_send(sd, src, size, ...) as two packet(hdr, data)
 		//Here need to convert multi byte data being sent with htons (dbuffer)
 
-		datahdr->th_win = htons(bit_win);   
-		if (stcp_network_send(sd, datahdr, sizeof(datahdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){ //CODY: not sure of changes I made here
+		datahdr->th_win = htons(bit_win);
+		if (stcp_network_send(sd, datahdr, sizeof(datahdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		*(ctx->last_byte_sent) = ctx->curr_sequence_num+sizeof(datahdr)+sizeof(*(ctx->data_buffer)); //CODY: rewrite this line
+		*(ctx->last_byte_sent) = ctx->curr_sequence_num + sizeof(*(ctx->data_buffer)) - 1;
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
