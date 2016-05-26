@@ -336,7 +336,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             //Here need to convert multi byte data being sent with htons (dbuffer)
 
             datahdr->th_win = htons(bit_win);
-            if (stcp_network_send(sd, datahdr, sizeof(datahdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){
+            if (stcp_network_send(sd, datahdr, sizeof(tcphdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){
             	dprintf("Error: stcp_network_send()");
             	exit(-1);
             }
