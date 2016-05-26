@@ -101,7 +101,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  exit(-1);
 	}
 	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
-	ctx->send_win = std::min(ctx->their_recv_win, congestion_win);
+	ctx->send_win = std::min(ctx->their_recv_win, ctx->congestion_win);
 
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
