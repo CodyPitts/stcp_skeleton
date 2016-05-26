@@ -272,7 +272,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	}
 	/* check whether it was the network, app, or a close request */
 	/*********************************APP_DATA***********************************/
-	if ((event & APP_DATA) || ((event & ANY_EVENT) == 3 | 5 | 7)){	// handle event 1,3,5,7 CODY: parenthesis issue? bitwise stuff
+	if ((event & APP_DATA) || ((event & ANY_EVENT) == (3 | 5 | 7))){	// handle event 1,3,5,7 CODY: parenthesis issue? bitwise stuff
 	  /* the application has requested that data be sent */
 	  /* see stcp_app_recv() */
 		//read data with stcp_app_recv(sd,dst,size) into dst as a char*
@@ -301,7 +301,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
-	if ((event & NETWORK_DATA) || ((event & ANY_EVENT) == 3 | 6 | 7))
+	if ((event & NETWORK_DATA) || ((event & ANY_EVENT) == (3 | 6 | 7)))
 	{
 		// Read in packet hdr from network
 		//We receive the packet but it probably needs to go to ntohs
@@ -354,7 +354,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	}
 	/***********************************APP_CLOSE_REQUESTED*************************/
 	// handle 4,5,6,7
-	if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == 5 | 6 | 7))
+	if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == (5 | 6 | 7)))
 	{
 		// Send FIN packet to network layer
 		tcphdr* finhdr;
