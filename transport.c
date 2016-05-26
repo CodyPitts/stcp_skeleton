@@ -459,7 +459,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				exit(-1);
 			}
 			//increment by one because a FIN header is sent
-			*(ctx->last_byte_sent)= *(ctx->last_byte_sent)++;
+			*(ctx->last_byte_sent)= *(ctx->last_byte_sent) + 1;
  		}
 
    		if(finSent && finRecv)
