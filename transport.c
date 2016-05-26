@@ -184,7 +184,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack = (tcphdr*)calloc(1, sizeof(synack));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
+	  //synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
+	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
 	  ctx->recv_win = bit_win + ctx->last_byte_ack - ctx->last_byte_sent + 1;
@@ -325,7 +326,8 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			finack = (tcphdr*)calloc(1, sizeof(tcphdr));
 			assert(finack);
 			finack->th_seq = ctx->curr_sequence_num;
-			finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
+			//finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
+			finack->th_ack = ctx->hdr_buffer->th_seq++;
 			finack->th_flags = TH_FIN & TH_ACK;
 			// window stuff
 			//Since we're sending to the network we'll need to htons
