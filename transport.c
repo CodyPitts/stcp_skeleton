@@ -111,6 +111,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
+		*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack; 
 
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
@@ -119,14 +120,17 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
 		ctx->curr_ack_num = ackhdr->th_ack;
 		ackhdr->th_flags = TH_ACK;
-		*(ctx->last_byte_ack) = ackhdr->th_ack; //CODY: tcp_seq to pointer (FIXED)
 		// Sliding window calculation
-		ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
+		ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 		ackhdr->th_win = htons(bit_win);
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
+	  //if the ack number recieved is incorrect
+	  }else{
+		  dprintf("Error: ACK number incorrect");
+		  exit(-1);
 	  }
 	}
 	//simultaneous syns sent
