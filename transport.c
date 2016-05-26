@@ -347,7 +347,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			exit(-1);
 		}
 
-		ctx->hdr_buffer = struct tcphdr * receivedData;
+		ctx->hdr_buffer = (struct tcphdr *) recvBuffer;
 		size_t hdr_size = ((struct tcphdr *)recvBuffer)->th_off * sizeof(uint32_t);
 
 
@@ -396,16 +396,18 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			}
 			else
 			{
+				//if no duplicate data, pass everything up to the application
 				stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 			}
 		}
 		//sending shit
 		//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 
-
+		//if we received a FIN, the peer no longer has anything to send us
 
 		//****************RECIEVED A FIN PACKET *******************************************
-		else if (ctx->hdr_buffer->th_flags & TH_FIN)
+		
+		/*else if (ctx->hdr_buffer->th_flags & TH_FIN)
 		{
 			// Send FIN ACK packet to network layer
 			tcphdr* finack;
@@ -436,6 +438,8 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 
 		// Pass data to application layer
 		stcp_app_send(sd, ctx->data_buffer, sizeof(ctx->data_buffer));
+		*/
+
 	}
 	/***********************************APP_CLOSE_REQUESTED*************************/
 	// handle 4,5,6,7
