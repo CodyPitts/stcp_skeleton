@@ -368,12 +368,12 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				//check to see if the duplicate data is large enough that it introduces new data
 				if(recvSeqNum + (receivedData - hdr_size) > ctx-> last_ack_num_sent){
 					duplicateDataSize = (ctx->last_ack_num_sent-1) - recvSeqNum;
-					stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - hdr_size);
+					stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - (hdr_size + duplicateDataSize));
 				}
 			}
 			else
 			{
-
+				stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 			}
 		}
 //sending shit
