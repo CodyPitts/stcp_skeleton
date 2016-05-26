@@ -246,7 +246,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
             exit(-1);
         }
     }
-  
+
     ctx->connection_state = CSTATE_ESTABLISHED;
     stcp_unblock_application(sd);
 
