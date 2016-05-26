@@ -348,59 +348,18 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
 		//if timeout stcp_fin_received
-<<<<<<< HEAD
 		event = stcp_wait_for_event(sd, 0, 5);
 
 		if (event & NETWORK_DATA){
 			// Recv ACK for sent FIN packet
 			//After we receive we want to ntohs
-=======
-		// Recv ACK for sent FIN packet
-		//After we receive we want to ntohs
-		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-			dprintf("Error: stcp_network_recv()");
-			exit(-1);
-		}
-		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-		// Check ACK, if incorrect, timeout
-		//otherwise, wait on all data, until FIN
-		//while loop, waiting for data/FIN
-		//if nothing, time out		
-		if (ctx->hdr_buffer->th_flags & TH_FIN){
-			// yay ACK flag recieve FIN
-			// add timeout stuff
-			//Receive so ntohs
->>>>>>> origin/master
+			//While loop, wait for all data from peer, checking for FIN
 			if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
 				dprintf("Error: stcp_network_recv()");
 				exit(-1);
 			}
 			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-<<<<<<< HEAD
-			// Check ACK, if incorrect, timeout
-			//otherwise, wait on all data, until FIN
-			//while loop, waiting for data/FIN
-			//if nothing, time out		
-			if (ctx->hdr_buffer->th_flags & TH_FIN){
-				// yay ACK flag recieve FIN
-				// add timeout stuff
-				//Receive so ntohs
-				if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-					our_dprintf("Error: stcp_network_recv()");
-					exit(-1);
-				}
-				ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-				tcphdr *ackhdr;
-				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
-				assert(ackhdr);
-				ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
-				ackhdr->th_flags = TH_ACK;
-				//Send
-				if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
-					our_dprintf("Error: stcp_network_send()");
-					exit(-1);
-				}
-=======
+
 			tcphdr *ackhdr;
 			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 			assert(ackhdr);
@@ -410,7 +369,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
 				dprintf("Error: stcp_network_send()");
 				exit(-1);
->>>>>>> origin/master
 			}
 		}
 		else if (event & TIMEOUT)
