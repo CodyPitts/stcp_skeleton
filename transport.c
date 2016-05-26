@@ -69,6 +69,14 @@ void transport_init(mysocket_t sd, bool_t is_active)
   generate_initial_seq_num(ctx);
   ctx->curr_sequence_num = ctx->initial_sequence_num;
   
+  ctx->last_byte_sent = (int*)calloc(1,sizeof(int));
+  assert(ctx->last_byte_sent);
+  ctx->last_byte_ack = (int*)calloc(1,sizeof(int));
+  assert(ctx->last_byte_ack);
+  *ctx->last_byte_sent = ctx->initial_sequence_num;
+  *ctx->last_byte_ack = ctx->initial_sequence_num;
+
+  
   /* XXX: you should send a SYN packet here if is_active, or wait for one
    * to arrive if !is_active.  after the handshake completes, unblock the
    * application with stcp_unblock_application(sd).  you may also use
@@ -258,9 +266,7 @@ static void generate_initial_seq_num(context_t *ctx)
   /*ctx->initial_sequence_num = RAND_NUM;*/
   srand(time(NULL));
   ctx->initial_sequence_num = rand() % 255;
-  ctx->curr_sequence_num = ctx->initial_sequence_num;
-  *(ctx->last_byte_sent) = ctx->initial_sequence_num;
-  *(ctx->last_byte_ack) = ctx->initial_sequence_num;
+
 #endif
 }
 
