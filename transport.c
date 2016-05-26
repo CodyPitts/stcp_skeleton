@@ -107,10 +107,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
             exit(-1);
     	}
 
-        printf("%u\n", ctx->curr_sequence_num);
-        printf("%u\n", ntohl(synhdr->th_seq));
-        printf("%u\n", ctx->hdr_buffer->th_ack);
-
     	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
     	ctx->send_win = std::min(ctx->their_recv_win, ctx->congestion_win);
 
