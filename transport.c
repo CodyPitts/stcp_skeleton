@@ -119,7 +119,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
-		*(ctx->last_byte_sent) = ctx->curr_sequence_num + 1;
+		*(ctx->last_byte_sent) = ctx->curr_sequence_num - 1;
 	  }
 	}
 	//simultaneous syns sent
