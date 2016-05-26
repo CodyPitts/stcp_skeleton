@@ -90,7 +90,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  dprintf("Error: stcp_network_send()"); //CODY: call with dprintf, not our_dprintf (FIXED)
 	  exit(-1);
 	}
-	*(ctx->last_byte_sent) = ctx->curr_sequence_num + 1; 
+	*(ctx->last_byte_sent) = ctx->curr_sequence_num; 
 	// Recieving from network requires setting the correct recv window
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
 		== -1){
@@ -103,6 +103,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
 		 // Check to see if peer's ack seq# is our SYN's seq# + 1
 	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
+
+		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
@@ -119,7 +121,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
-		*(ctx->last_byte_sent) = ctx->curr_sequence_num - 1;
 	  }
 	}
 	//simultaneous syns sent
@@ -139,7 +140,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  //*(ctx->last_byte_sent) = ctx->curr_sequence_num;
+	  *(ctx->last_byte_sent) = ctx->curr_sequence_num;
 
 	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
@@ -156,7 +157,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 			*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack;
 	    }
 	  }
-	  //if not SYN ACK
+	  //if not SYN ACK after simultaneous SYN's
 	  else
 	  {
 	  	dprintf("Error: wrong flags");
@@ -170,32 +171,31 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  exit(-1);
 	}
   } else {
-	  // Passively waiting for syn
+	  // Passively waiting for SYN
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
 	ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+	//check for SYN flag
 	if (ctx->hdr_buffer->th_flags & TH_SYN) {
-	  //send SYN ACK, with our previous SEQ number, and their SEQ + 1
-	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
+	  //send a syn ack in response
 	  tcphdr *synack;
 	  synack = (tcphdr*)calloc(1, sizeof(synack));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  //synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
 	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
-	  ctx->recv_win = bit_win + ctx->last_byte_ack - ctx->last_byte_sent + 1;
-	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win);
-	  synack->th_win = htons(ctx->send_win);
+	  ctx->recv_win = bit_win;
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
+	  synack->th_win = htons(ctx->recv_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  *(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num;
+	  *(ctx->last_byte_sent) = ctx->curr_sequence_num;
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		  == -1){
 		dprintf("Error: stcp_network_recv()");
@@ -208,8 +208,13 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		dprintf("Error: Wrong ACK");
 		exit(-1);
 	  } else {
-		  ctx->curr_ack_num = ntohs(ctx->hdr_buffer->th_seq)+1;
+		  ctx->curr_ack_num = ctx->hdr_buffer->th_seq+1;
 	  }
+	}
+	//if Passively waiting and get a packet that isn't a SYN
+	else {
+	  dprintf("Error: wrong flags");
+	  exit(-1);
 	}
   }
   
