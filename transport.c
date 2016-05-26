@@ -185,13 +185,13 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  exit(-1);
 	}
   } else {
-	  // Passively waiting for SYN
+	// Passively waiting for SYN
 	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, sizeof(tcphdr)))
 		== -1){
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
-	ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 	//check for SYN flag
 	if (ctx->hdr_buffer->th_flags & TH_SYN) {
 	  //send a syn ack in response
@@ -202,7 +202,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack->th_ack = ctx->hdr_buffer->th_seq++;
 	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
-	  ctx->recv_win = bit_win;
 	  ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 	  synack->th_win = htons(ctx->recv_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
@@ -215,7 +214,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		dprintf("Error: stcp_network_recv()");
 		exit(-1);
 	  }
-	  ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+	  ctx->recv_win = ntohs(ctx->htons	dr_buffer->th_win);
 	  // Wait on ACK
 	  if (!(ctx->hdr_buffer->th_flags & TH_ACK)
 		  || !(ctx->hdr_buffer->th_seq == ctx->curr_sequence_num+1)){
