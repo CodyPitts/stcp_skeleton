@@ -90,9 +90,9 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  dprintf("Error: stcp_network_send()"); //CODY: call with dprintf, not our_dprintf (FIXED)
 	  exit(-1);
 	}
-	*(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num; //CODY: pointer to long int issue (FIXED)
+	*(ctx->last_byte_sent) = ctx->curr_sequence_num + 1; 
 	// Recieving from network requires setting the correct recv window
-	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win+bit_win))
+	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
 		== -1){
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
@@ -101,26 +101,25 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
 	if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
-		 // Check to see if peer's ack seq# is our SYN's seq# + the header size + 1
-	  // This may be an incorrect way to check for header size
-	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + sizeof(syndr) + 1){
+		 // Check to see if peer's ack seq# is our SYN's seq# + 1
+	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 		assert(ackhdr);
-		ackhdr->th_ack = ntohs(ctx->hdr_buffer->th_seq + sizeof(ctx->hdr_buffer) + 1);
+		ackhdr->th_ack = ntohs(ctx->hdr_buffer->th_seq + 1);
 		ctx->curr_ack_num = ackhdr->th_ack;
 		ackhdr->th_flags = TH_ACK;
 		*(ctx->last_byte_ack) = ackhdr->th_ack; //CODY: tcp_seq to pointer (FIXED)
 		// Sliding window calculation
-		ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack) + 1;
+		ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 		ackhdr->th_win = htons(bit_win);
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
 		}
-		*(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num;
+		*(ctx->last_byte_sent) = ctx->curr_sequence_num + 1;
 	  }
 	}
 	//simultaneous syns sent
