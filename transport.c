@@ -437,31 +437,31 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			{
 				stcp_fin_received(sd);
 			}
-	}
-	/***********************************APP_CLOSE_REQUESTED*************************/
-	//Handle 4,5,6,7
-	if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == (5 | 6 | 7)))
-	{
-		//Send FIN packet to network layer
-		tcphdr* finhdr;
-		finhdr = (tcphdr*)calloc(1, sizeof(tcphdr));
-		assert(finhdr);
-		finhdr->th_seq = htons(ctx->curr_sequence_num);
-		finhdr->th_flags = TH_FIN;
-		finhdr->th_win = ctx->recv_win;
-
-		//send the header
-		if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1){
-			dprintf("Error: stcp_network_send()");
-			exit(-1);
 		}
-		//increment by one because a FIN header is sent
-		*(ctx->last_byte_sent)++;
-    }
+	/***********************************APP_CLOSE_REQUESTED*************************/
+		//Handle 4,5,6,7
+		if ((event & APP_CLOSE_REQUESTED) || ((event & ANY_EVENT) == (5 | 6 | 7))){
+			//Send FIN packet to network layer
+			tcphdr* finhdr;
+			finhdr = (tcphdr*)calloc(1, sizeof(tcphdr));
+			assert(finhdr);
+			finhdr->th_seq = htons(ctx->curr_sequence_num);
+			finhdr->th_flags = TH_FIN;
+			finhdr->th_win = ctx->recv_win;
 
-    if(finSent && finRecv)
-	{
-		ctx->done = true;
+			//send the header
+			if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1){
+				dprintf("Error: stcp_network_send()");
+				exit(-1);
+			}
+			//increment by one because a FIN header is sent
+			*(ctx->last_byte_sent)++;
+ 		}
+
+   		if(finSent && finRecv)
+		{
+			ctx->done = true;
+		}
 	}
 }
 
