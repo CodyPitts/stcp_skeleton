@@ -359,11 +359,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		{
 			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
 			{
-				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 				finRecv = true;
 			}
 			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 			}
 			else if (ctx->hdr_buffer->th_flags & TH_ACK){
 				finRecv = true;
@@ -374,11 +374,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			//see if there was an ACK or FIN
 			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
 			{
-				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 				finRecv = true;
 			}
 			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 			}
 			else if (ctx->hdr_buffer->th_flags & TH_ACK){
 				finRecv = true;
