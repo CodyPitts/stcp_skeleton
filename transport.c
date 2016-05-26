@@ -321,7 +321,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			exit(-1);
 		}
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num + sizeof(*(ctx->data_buffer)) - 1;
-		ctx->curr_sequence_num = ctx->last_byte_sent +1;
+		ctx->curr_sequence_num = *(ctx->last_byte_sent) + 1;
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
@@ -336,7 +336,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 		//*******************RECIEVED AN ACK PACKET **********************************
 		if (ctx->hdr_buffer->th_flags & TH_ACK){
-			ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;	
+			*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack-1;	
 			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
 				dprintf("Error: stcp_network_recv()");
 				exit(-1);
