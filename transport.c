@@ -392,13 +392,25 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				if(recvSeqNum + (receivedData - hdr_size) > ctx-> last_ack_num_sent){
 					duplicateDataSize = (ctx->last_ack_num_sent-1) - recvSeqNum;
 					stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - (hdr_size + duplicateDataSize));
+					lastRecvNum = recvSeqNum + (receivedData - hdr_size);
 				}
 			}
 			else
 			{
 				//if no duplicate data, pass everything up to the application
 				stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
+				lastRecvNum = recvSeqNum + (receivedData - hdr_size);
 			}
+
+			//send an ACK based on the data recieved
+			tcphdr *ackhdr;
+			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+			assert(ackhdr);
+			ackhdr->th_flags = TH_ACK;
+			ackhdr->th_ack = lastRecvNum + 1;
+			ctx ->last_ack_num_sent = ackhdr->th_ack;
+			ackhdr->th_win = ctx->recv_win;
+			stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 		}
 		//sending shit
 		//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
