@@ -32,13 +32,16 @@ typedef struct
   
   int connection_state;   /* state of the connection (established, etc.) */
   tcp_seq initial_sequence_num;
-  tcp_seq curr_sequence_num;
-  tcp_seq curr_ack_num;
+  tcp_seq curr_sequence_num; //the current number to start from when sending
+  tcp_seq curr_ack_num; //the last ack number we sent
   
   /* any other connection-wide global variables go here */
-  tcp_seq congestion_win, recv_win, send_win;
-  int* last_byte_sent;
-  int* last_byte_ack;
+  tcp_seq congestion_win; //Congestion window
+  tcp_seq recv_win;		  //our receive window: 3072
+  tcp_seq send_win;		  //our send window: min(congestion window, their receive window) - (last byte sent - last byte ack'd)
+  tcp_seq their_recv_win; //their receive window
+  int* last_byte_sent;    //the last byte we have sent
+  int* last_byte_ack;	  //the last byte ack'd by peer
 
   tcphdr* hdr_buffer;
   char* data_buffer;
@@ -97,15 +100,18 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
-	ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+	ctx->their_recv_win: ntohs(ctx->hdr_buffer->th_win);
+	ctx->send_win = std::min(ctx->their_recv_win, congestion_win);
+
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
 	if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
-		 // Check to see if peer's ack seq# is our SYN's seq# + 1
+	  // Check to see if peer's ack seq# is our SYN's seq# + 1
+	  //if so, send ACK in response
 	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
-
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
+
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
@@ -163,7 +169,6 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  	dprintf("Error: wrong flags");
 	    exit(-1);
 	  }
-
 	}
 	//If not SYN ACK or SYN
 	else {
