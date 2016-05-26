@@ -367,7 +367,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 		
 		//*******************CHECK FOR FIN OR ACK ONLY HEADER**********************************
-			//if data size is onlt the size of a header
+			//if data size is only the size of a header
 			if(receivedData == hdr_size){	
 				tcphdr *ackhdr;
 				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
