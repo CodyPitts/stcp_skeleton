@@ -352,7 +352,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win); 
             int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
             recvBuffer = malloc(max_send_window - data_in_flight);
-            receivedData = stcp_app_recv(sd, recvBuffer, (max_send_window - data_in_flight)) ;
+            receivedData = stcp_network_recv(sd, recvBuffer, (max_send_window - data_in_flight)) ;
             if (receivedData == (size_t)-1){
                 dprintf("Error: stcp_network_recv()");
                 exit(-1);
@@ -439,10 +439,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		if(finRecv)
 		{
 			stcp_fin_received(sd);
-			if(finSent)
-			{
-
-			}
 		}
 
 	}
@@ -465,8 +461,12 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		}
 		//increment by one because a FIN header is sent
 		*(ctx->last_byte_sent)++;
-
     }
+
+    if(finSent && finRecv)
+	{
+		ctx->done = true;
+	}
 }
 
 /**********************************************************************/
