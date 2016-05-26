@@ -285,15 +285,26 @@ static void control_loop(mysocket_t sd, context_t *ctx)
     assert(ctx->hdr_buffer);
     ctx->data_buffer = (char*)calloc(1, sizeof(char*));
     assert(ctx->data_buffer);
-
+    timespec *abstime;
+    abstime->tv_sec = 5;
+    abstime->tv_nsec = 5000;
+    bool finRecv = false;
+    bool finSent = false;
+    int max_send_window; 
+    int data_in_flight;
+		
     while (!ctx->done){
         unsigned int event;
 	
         /* see stcp_api.h or stcp_api.c for details of this function */
         /* XXX: you will need to change some of these arguments! */
-        event = stcp_wait_for_event(sd, 0, NULL);
-	
-        if (event & TIMEOUT)
+        if (finRecv){
+    		event = stcp_wait_for_event(sd, 0, abstime);
+        }
+        else{
+        	event = stcp_wait_for_event(sd, 0, NULL);
+        }
+	 	if (event & TIMEOUT)
         {
             dprintf("Error: TIMEOUT");
             exit(-1);
@@ -304,10 +315,9 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             /* the application has requested that data be sent */
             /* see stcp_app_recv() */
             //Read data with stcp_app_recv(sd,dst,size) into dst as a char*
-            //Read data with stcp_app_recv(sd,dst,size) into dst as a char*
             //Sliding window calculations
-            int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win);
-            int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
+            max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win);
+            data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
             //Get data from the app
             if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == (size_t)-1){
             	dprintf("Error: stcp_app_recv()");
@@ -335,7 +345,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
         {
             void* recvBuffer;
             size_t receivedData;
-            bool finRecv = false;
             tcp_seq recvSeqNum;
             tcp_seq lastRecvNum;
             int duplicateDataSize;
@@ -356,17 +365,28 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		
 		//*******************CHECK FOR FIN OR ACK ONLY HEADER**********************************
 		if(receivedData == hdr_size)
-		{
-			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
+		{	
+			tcphdr *ackhdr;
+			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+			assert(ackhdr);
+			ackhdr->th_flags = TH_ACK;
+			ackhdr->th_ack = ctx->hdr_buffer-> + 1;
+			ctx ->last_ack_num_sent = ackhdr->th_ack;
+			ackhdr->th_win = ctx->recv_win;
+
+			//check if just an ACK, otherwise check flags and send an ACK if necessary
+			if (ctx->hdr_buffer->th_flags & TH_ACK){
+				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+			}
+			else if(ctx->hdr_buffer->th_flags  & (TH_FIN | TH_ACK))
 			{
 				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 				finRecv = true;
-			}
-			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 			}
 			else if (ctx->hdr_buffer->th_flags & TH_ACK){
 				finRecv = true;
+				stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 			}
 		}
 		//*******************RECIEVED A DATA PACKET **********************************
@@ -413,10 +433,16 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			ackhdr->th_win = ctx->recv_win;
 			stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 		}
-		//stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
-
 		//If we received a FIN, the peer no longer has anything to send us
 		//ACK the FIN and wait on the app to give us everything
+		if(finRecv)
+		{
+			stcp_fin_received(sd);
+			if(finSent)
+			{
+
+			}
+		}
 
 	}
 	/***********************************APP_CLOSE_REQUESTED*************************/
@@ -429,54 +455,17 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		assert(finhdr);
 		finhdr->th_seq = htons(ctx->curr_sequence_num);
 		finhdr->th_flags = TH_FIN;
-		//Sliding window
+		finhdr->th_win = ctx->recv_win;
+
+		//send the header
 		if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1){
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		*(ctx->last_byte_sent) = sizeof(finhdr);
-		//Start a timer for timeout on ack received
-		//gettimeofday(2)
-		//Check for timeout while waiting on network recv
-		//If timeout stcp_fin_received
+		//increment by one because a FIN header is sent
+		*(ctx->last_byte_sent)++;
 
-        timespec *abstime;
-        abstime->tv_sec = 5;
-        abstime->tv_nsec = 5000;
-		event = stcp_wait_for_event(sd, 0, abstime);
-
-		if (event & NETWORK_DATA){
-			//Recv ACK for sent FIN packet
-			//After we receive we want to ntohs
-			//While loop, wait for all data from peer, checking for FIN
-			if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
-				dprintf("Error: stcp_network_recv()");
-				exit(-1);
-			}
-			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-
-			tcphdr *ackhdr;
-			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
-			assert(ackhdr);
-			ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
-			ackhdr->th_flags = TH_ACK;
-			//Send
-			if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr), NULL)) == -1){
-				dprintf("Error: stcp_network_send()");
-				exit(-1);
-			}
-		}
-		else if (event & TIMEOUT)
-		{
-			dprintf("Error: TIMEOUT");
-			exit(-1);
-		}
-		//Close down the application layer
-		stcp_fin_received(sd);
-	}
-	/*********************************TIMEOUT******************************************/
-	/* etc. */
-  }
+    }
 }
 
 /**********************************************************************/
