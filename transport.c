@@ -294,15 +294,16 @@ static void control_loop(mysocket_t sd, context_t *ctx)
     //abstime->tv_nsec = 5000;
     bool finRecv = false;
     bool finSent = false;
+    bool timeOut = true;
     int max_send_window; 
     int data_in_flight;
-		
+    tcp_seq finNum;
     while (!ctx->done){
         unsigned int event;
 	
         /* see stcp_api.h or stcp_api.c for details of this function */
         /* XXX: you will need to change some of these arguments! */
-        if (finSent){
+        if (timeOut){
     		event = stcp_wait_for_event(sd, ANY_EVENT, NULL);
         }
         else{
@@ -323,7 +324,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win);
             data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
             //Get data from the app
-                        
+
             if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == (size_t)-1){
             	dprintf("Error: stcp_app_recv()");
             	exit(-1);
@@ -383,14 +384,25 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				//check if just an ACK, otherwise check flags and send an ACK if necessary
 				if (ctx->hdr_buffer->th_flags & TH_ACK){
 					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+					//once ack for FIN is receieved, stop timeouts
+					if(ctx->hdr_buffer->th_ack == finNum)
+					{
+						timeOut = false;
+					}
 				}
 				else if(ctx->hdr_buffer->th_flags  & (TH_FIN | TH_ACK))
 				{
 					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 					finRecv = true;
+
+					if(ctx->hdr_buffer->th_ack == finNum)
+					{
+						timeOut = false;
+					}
+
 					stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 				}
-				else if (ctx->hdr_buffer->th_flags & TH_ACK){
+				else if (ctx->hdr_buffer->th_flags & TH_FIN){
 					finRecv = true;
 					stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 				}
@@ -402,11 +414,19 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				{
 					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 					finRecv = true;
+					if(ctx->hdr_buffer->th_ack == finNum)
+					{
+						timeOut = false;
+					}
 				}
 				else if (ctx->hdr_buffer->th_flags & TH_ACK){
 					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+					if(ctx->hdr_buffer->th_ack == finNum)
+					{
+						timeOut = false;
+					}
 				}
-				else if (ctx->hdr_buffer->th_flags & TH_ACK){
+				else if (ctx->hdr_buffer->th_flags & TH_FIN){
 					finRecv = true;
 				}
 
@@ -454,7 +474,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			finhdr->th_seq = htons(ctx->curr_sequence_num);
 			finhdr->th_flags = TH_FIN;
 			finhdr->th_win = ctx->recv_win;
-
 			//send the header
 			if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1){
 				dprintf("Error: stcp_network_send()");
@@ -462,6 +481,10 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			}
 			//increment by one because a FIN header is sent
 			*(ctx->last_byte_sent)= *(ctx->last_byte_sent) + 1;
+			//look for ACK for FIN
+			finNum = *(ctx->last_byte_sent) + 1;
+			finSent = true;
+			timeOut = true;
  		}
 
    		if(finSent && finRecv)
