@@ -92,7 +92,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	synhdr = (tcphdr *)calloc(1, sizeof(tcphdr));
 	assert(synhdr);
 	// Setting flags in header
-	synhdr->th_seq = ctx->curr_sequence_num;
+	synhdr->th_seq = htonl(ctx->curr_sequence_num);
 	synhdr->th_flags = TH_SYN;
 	synhdr->th_win = htons(bit_win); //CODY: wrote syn instead of synhdr (FIXED)
 	// First handshake
@@ -418,41 +418,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 
 		//if we received a FIN, the peer no longer has anything to send us
-
-		//****************RECIEVED A FIN PACKET *******************************************
-		
-		/*else if (ctx->hdr_buffer->th_flags & TH_FIN)
-		{
-			// Send FIN ACK packet to network layer
-			tcphdr* finack;
-			finack = (tcphdr*)calloc(1, sizeof(tcphdr));
-			assert(finack);
-			finack->th_seq = ctx->curr_sequence_num;
-			//finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
-			finack->th_ack = ctx->hdr_buffer->th_seq++;
-			finack->th_flags = TH_FIN & TH_ACK;
-			// window stuff
-			//Since we're sending to the network we'll need to htons
-			if (stcp_network_send(sd, finack, sizeof(finack), NULL) == -1){
-				dprintf("Error: stcp_network_send()");
-				exit(-1);
-			}
-			*(ctx->last_byte_sent) = sizeof(finack) + ctx->curr_sequence_num;
-			stcp_fin_received(sd);
-		}
-		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
-		else if (!ctx->hdr_buffer->th_flags){
-			//recv data
-			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
-				dprintf("Error: stcp_network_recv()");
-				exit(-1);
-			}
-			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-		}
-
-		// Pass data to application layer
-		stcp_app_send(sd, ctx->data_buffer, sizeof(ctx->data_buffer));
-		*/
+		//ack the FIN and wait on the app to give us everything
 
 	}
 	/***********************************APP_CLOSE_REQUESTED*************************/
@@ -463,10 +429,9 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		tcphdr* finhdr;
 		finhdr = (tcphdr*)calloc(1, sizeof(tcphdr));
 		assert(finhdr);
-		finhdr->th_seq = ctx->curr_sequence_num;
+		finhdr->th_seq = htons(ctx->curr_sequence_num);
 		finhdr->th_flags = TH_FIN;
 		// window stuff
-		//Since we're sending to the network we'll need to htons
 		if (stcp_network_send(sd, finhdr, sizeof(finhdr),NULL) == -1){
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
