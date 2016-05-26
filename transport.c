@@ -208,6 +208,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
 	  synack->th_ack = ctx->hdr_buffer->th_seq + 1;
+	  synack->th_flags = (TH_SYN | TH_ACK);
 	  // Sliding window calculations
 	  ctx->last_ack_num_sent = synack->th_ack;
 	  ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
