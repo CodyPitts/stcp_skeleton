@@ -99,6 +99,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
     	   dprintf("Error: stcp_network_send()");
     	   exit(-1);
     	}
+    	//Undoing the htonl that we did for the send
+    	synhdr->th_seq = ntohl(synhdr->th_seq);
     	*(ctx->last_byte_sent) = ctx->curr_sequence_num; 
     	//Recieving from network requires setting the correct recv window
     	if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
