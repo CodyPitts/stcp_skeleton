@@ -124,7 +124,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 
             	//Creating ACK header for last handshake
             	tcphdr *ackhdr;
-            	ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+            	ackhdr = (tcphdr *)calloc(1, sizeof(tcphdr));
             	assert(ackhdr);
             	ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
             	ctx->last_ack_num_sent = ackhdr->th_ack;
@@ -288,10 +288,10 @@ static void control_loop(mysocket_t sd, context_t *ctx)
     assert(ctx->hdr_buffer);
     ctx->data_buffer = (char*)calloc(1, sizeof(char*));
     assert(ctx->data_buffer);
-    timespec *abstime;
-    abstime= (timespec*)malloc(sizeof(timespec*));
-    abstime->tv_sec = 5;
-    abstime->tv_nsec = 5000;
+    //timespec *abstime;
+    //abstime= (timespec*)malloc(sizeof(timespec*));
+    //abstime->tv_sec = 5;
+    //abstime->tv_nsec = 5000;
     bool finRecv = false;
     bool finSent = false;
     int max_send_window; 
@@ -303,10 +303,10 @@ static void control_loop(mysocket_t sd, context_t *ctx)
         /* see stcp_api.h or stcp_api.c for details of this function */
         /* XXX: you will need to change some of these arguments! */
         if (finSent){
-    		event = stcp_wait_for_event(sd, 0, abstime);
+    		event = stcp_wait_for_event(sd, 7, NULL);
         }
         else{
-        	event = stcp_wait_for_event(sd, 0, NULL);
+        	event = stcp_wait_for_event(sd, 7, NULL);
         }
 	 	if (event & TIMEOUT)
         {
