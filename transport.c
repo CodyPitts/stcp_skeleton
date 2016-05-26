@@ -199,6 +199,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
         exit(-1);
         }
         ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
+        ctx->-hdr_buffer->th_seq = ntohl(ctx->hdr_buffer->th_seq)
         //Check for SYN flag
         if (ctx->hdr_buffer->th_flags & TH_SYN) {
             //Send a syn ack in response
