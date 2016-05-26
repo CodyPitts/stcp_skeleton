@@ -93,5 +93,4 @@ with a timer to allow for potential timeouts. If finRecv and finSent are both tr
 
 Endianness is not properly tested for.
 Control loop is not fully functional due to faulty logic in the sending process. This is possibly due to issues with the sliding window.
-
-
+Possible event flag issues.
