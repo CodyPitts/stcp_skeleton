@@ -321,7 +321,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			exit(-1);
 		}
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num + sizeof(*(ctx->data_buffer)) - 1;
-		ctx->curr_sequence_num = ctx->last_byte_sent +1;
+		ctx->curr_sequence_num = *(ctx->last_byte_sent) + 1;
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
