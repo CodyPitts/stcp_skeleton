@@ -100,7 +100,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
-	ctx->their_recv_win: ntohs(ctx->hdr_buffer->th_win);
+	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 	ctx->send_win = std::min(ctx->their_recv_win, congestion_win);
 
 	// See if packet recv is the SYN_ACK packet
