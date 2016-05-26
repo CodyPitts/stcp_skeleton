@@ -101,7 +101,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  exit(-1);
 	}
 	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
-	ctx->send_win = std::min(ctx->their_recv_win, congestion_win);
+	ctx->send_win = std::min(ctx->their_recv_win, ctx->congestion_win);
 
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
@@ -144,7 +144,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack->th_ack = ctx->hdr_buffer->th_seq+1;
 	  // Sliding window calculation 
 	  ctx->curr_ack_num = synack->th_ack;
-	  ctx->send_win = std::min(ctx->congestion_win, ctx->their,recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 
 	  synack->th_win = htons(bit_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
@@ -392,7 +392,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
 		//if timeout stcp_fin_received
-		event = stcp_wait_for_event(sd, 0, 5); //CODY: invalid conversion from ‘int’ to ‘const timespec*
+
+        timespec *abstime;
+        abstime->tv_sec = 5;
+        abstime->tv_nsec = 5000;
+		event = stcp_wait_for_event(sd, 0, abstime); //CODY: invalid conversion from ‘int’ to ‘const timespec*
 
 		if (event & NETWORK_DATA){
 			// Recv ACK for sent FIN packet
