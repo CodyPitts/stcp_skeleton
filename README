@@ -90,3 +90,8 @@ Within our APP_CLOSE_REQUESTED event, we create a FIN packet to send to the netw
 with a timer to allow for potential timeouts. If finRecv and finSent are both true, we exit the loop.
 
 /**************KNOWN ISSUES**********************/
+
+Endianness is not properly tested for.
+Control loop is not fully functional due to faulty logic in the sending process. This is possibly due to issues with the sliding window.
+
+
