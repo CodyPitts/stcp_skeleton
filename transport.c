@@ -323,6 +323,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win);
             data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
             //Get data from the app
+                        
             if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == (size_t)-1){
             	dprintf("Error: stcp_app_recv()");
             	exit(-1);
@@ -334,6 +335,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             datahdr->th_seq = ctx->curr_sequence_num;
             //Send to network layer using stcp_network_send(sd, src, size, ...) as two packet(hdr, data)
             //Here need to convert multi byte data being sent with htons (dbuffer)
+
 
             datahdr->th_win = htons(bit_win);
             if (stcp_network_send(sd, datahdr, sizeof(tcphdr), (void *)(ctx->data_buffer), sizeof(tcphdr), NULL) == -1){
