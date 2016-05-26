@@ -330,6 +330,8 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		void* recvBuffer;
         size_t receivedData;
         bool finRecv = false;
+        tcp_seq recvSeqNum;
+        tcp_seq lastRecvNum;
 		int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win); 
 		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
 		recvBuffer = malloc(max_send_window - data_in_flight);
@@ -358,9 +360,24 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			if (ctx->hdr_buffer->th_flags & TH_ACK){
 				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 			}
+			recvSeqNum = ctx->hdr_buffer->th_seq;
 
+			//check to see if there was duplicate data
+			if(recvSeqNum < ctx->last_ack_num_sent)
+			{
+				//check to see if the duplicate data is large enough that it introduces new data
+				if(recvSeqNum + (receivedData - hdr_size) > ctx-> last_ack_num_sent){
+					duplicateDataSize = (ctx->last_ack_num_sent-1) - recvSeqNum;
+					stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - hdr_size);
+				}
+			}
+			else
+			{
+
+			}
 		}
-
+//sending shit
+//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 
 
 
