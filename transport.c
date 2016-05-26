@@ -289,6 +289,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
     ctx->data_buffer = (char*)calloc(1, sizeof(char*));
     assert(ctx->data_buffer);
     timespec *abstime;
+    abstime= (timespec*)malloc(sizeof(timespec*));
     abstime->tv_sec = 5;
     abstime->tv_nsec = 5000;
     bool finRecv = false;
