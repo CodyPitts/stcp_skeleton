@@ -338,6 +338,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
         bool finRecv = false;
         tcp_seq recvSeqNum;
         tcp_seq lastRecvNum;
+        int duplicateDataSize;
 		int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win); 
 		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
 		recvBuffer = malloc(max_send_window - data_in_flight);
