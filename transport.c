@@ -108,7 +108,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
 		assert(ackhdr);
-		ackhdr->th_ack = ntohs(ctx->hdr_buffer->th_seq + 1);
+		ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
 		ctx->curr_ack_num = ackhdr->th_ack;
 		ackhdr->th_flags = TH_ACK;
 		*(ctx->last_byte_ack) = ackhdr->th_ack; //CODY: tcp_seq to pointer (FIXED)
@@ -125,24 +125,46 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	//simultaneous syns sent
 	else if(ctx->hdr_buffer->th_flags & TH_SYN) {
 	  //send SYN ACK, with our previous SEQ number, and their SEQ + 1
-	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 	  tcphdr *synack;
 	  synack = (tcphdr*)calloc(1, sizeof(tcphdr));
 	  assert(synack);
 	  synack->th_seq = ctx->curr_sequence_num;
-	  synack->th_ack = ntohs(ctx->hdr_buffer->th_seq)+1;
-	  // Sliding window calculation maybe
+	  synack->th_ack = ctx->hdr_buffer->th_seq+1;
+	  // Sliding window calculation 
 	  ctx->curr_ack_num = synack->th_ack;
-	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) + ctx->last_byte_sent - ctx->last_byte_ack + 1;
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 
 	  synack->th_win = htons(bit_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  *(ctx->last_byte_sent) = sizeof(tcphdr) + ctx->curr_sequence_num;
+	  //*(ctx->last_byte_sent) = ctx->curr_sequence_num;
+
+	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
+	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
+		== -1){
+	  dprintf("Error: stcp_network_recv()");
+	  exit(-1);
+	  }
+	  //check to see if SYN ACK
+	  if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
+	  	//check to see if ACK is  correct
+	  	if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
+			ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
+			ctx->curr_ack_num = ctx->hdr_buffer->th_seq + 1;
+			*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack;
+	    }
+	  }
+	  //if not SYN ACK
+	  else
+	  {
+	  	dprintf("Error: wrong flags");
+	    exit(-1);
+	  }
+
 	}
-	//wrong flags
+	//If not SYN ACK or SYN
 	else {
 	  dprintf("Error: wrong flags");
 	  exit(-1);
