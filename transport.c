@@ -159,13 +159,13 @@ void transport_init(mysocket_t sd, bool_t is_active)
 
             synack->th_win = htons(bit_win);
             if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
-    		dprintf("Error: stcp_network_send()");
-    		exit(-1);
+                dprintf("Error: stcp_network_send()");
+                exit(-1);
             }
 
     	    //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
     	    if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
-    		  == -1){
+                == -1){
                 dprintf("Error: stcp_network_recv()");
                 exit(-1);
             }
