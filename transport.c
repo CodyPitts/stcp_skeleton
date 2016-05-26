@@ -92,7 +92,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	synhdr = (tcphdr *)calloc(1, sizeof(tcphdr));
 	assert(synhdr);
 	// Setting flags in header
-	synhdr->th_seq = htonl(ctx->curr_sequence_num);
+	synhdr->th_seq = ctx->curr_sequence_num;
 	synhdr->th_flags = TH_SYN;
 	synhdr->th_win = htons(bit_win); //CODY: wrote syn instead of synhdr (FIXED)
 	// First handshake
@@ -121,6 +121,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
 		*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack - 1; 
 
+
+		
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
 		ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
@@ -130,7 +132,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		ackhdr->th_flags = TH_ACK;
 		// Sliding window calculation
 		ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
-		ackhdr->th_win = htons(bit_win);
+		ackhdr->th_win = bit_win;
 		if ((stcp_network_send(sd, ackhdr, sizeof(tcphdr),NULL)) == -1){
 		  dprintf("Error: stcp_network_send()");
 		  exit(-1);
@@ -212,7 +214,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  // Sliding window calculations
 	  ctx->last_ack_num_sent = synack->th_ack;
 	  ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
-	  synack->th_win = htons(ctx->recv_win);
+	  synack->th_win = ctx->recv_win;
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
