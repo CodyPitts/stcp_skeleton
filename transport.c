@@ -21,8 +21,9 @@
 #include "stcp_api.h"
 #include "transport.h"
 
-enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
 #define bit_win 3072
+
+enum { CSTATE_ESTABLISHED, CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED };    /* you should have more states */
 
 /* this structure is global to a mysocket descriptor */
 typedef struct
@@ -273,7 +274,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			dprintf("Error: stcp_network_send()");
 			exit(-1);
 		}
-		ctx->last_byte_sent = ctx->curr_sequence_num+sizeof(datahdr)+sizeof(*(ctx->data_buffer)); //CODY: rewrite this line
+		*(ctx->last_byte_sent) = ctx->curr_sequence_num+sizeof(datahdr)+sizeof(*(ctx->data_buffer)); //CODY: rewrite this line
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
@@ -302,7 +303,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			finack = (tcphdr*)calloc(1, sizeof(tcphdr));
 			assert(finack);
 			finack->th_seq = ctx->curr_sequence_num;
-			finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++;
+			finack->th_ack = ntohs(ctx->hdr_buffer->th_seq)++; //CODY: ACK NOT CORRECTLY CALCULATED
 			finack->th_flags = TH_FIN & TH_ACK;
 			// window stuff
 			//Since we're sending to the network we'll need to htons
@@ -311,7 +312,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				exit(-1);
 			}
 			*(ctx->last_byte_sent) = sizeof(finack) + ctx->curr_sequence_num;
-			stcp_fin_recieved(sd);
+			stcp_fin_received(sd);
 		}
 		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
 		else if (!ctx->hdr_buffer->th_flags){
@@ -335,7 +336,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		tcphdr* finhdr;
 		finhdr = (tcphdr*)calloc(1, sizeof(tcphdr));
 		assert(finhdr);
-		finhdr->th_seq = curr_sequence_num;
+		finhdr->th_seq = ctx->curr_sequence_num;
 		finhdr->th_flags = TH_FIN;
 		// window stuff
 		//Since we're sending to the network we'll need to htons
@@ -348,7 +349,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		//gettimeofday(2)
 		//somehow check for timeout while waiting on network recv
 		//if timeout stcp_fin_received
-		event = stcp_wait_for_event(sd, 0, 5);
+		event = stcp_wait_for_event(sd, 0, 5); //CODY: invalid conversion from ‘int’ to ‘const timespec*
 
 		if (event & NETWORK_DATA){
 			// Recv ACK for sent FIN packet
@@ -377,10 +378,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			exit(-1);
 		}
 		// Close down the application layer
-		stcp_fin_recieved(sd);
+		stcp_fin_received(sd);
 	}
 	/*********************************TIMEOUT******************************************/
 	/* etc. */
+  }
 }
 
 /**********************************************************************/
