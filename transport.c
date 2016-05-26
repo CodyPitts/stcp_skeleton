@@ -329,17 +329,18 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	{
 		void* recvBuffer;
         size_t receivedData;
+        bool finRecv = false;
 		int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win); 
 		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
 		recvBuffer = malloc(max_send_window - data_in_flight);
-		receivedData = stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) ;
+		receivedData = stcp_app_recv(sd, recvBuffer, (max_send_window - data_in_flight)) ;
 		if (receivedData == (size_t)-1){
 			dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
 
 		ctx->hdr_buffer = struct tcphdr * receivedData;
-		size_t hdr_size = ((struct tcphdr *)dst)->th_off * sizeof(uint32_t);
+		size_t hdr_size = ((struct tcphdr *)recvBuffer)->th_off * sizeof(uint32_t);
 
 
 		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
@@ -353,7 +354,10 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		}
 		//*******************RECIEVED A DATA PACKET **********************************
 		else{
-
+			//see if there was an ACK
+			if (ctx->hdr_buffer->th_flags & TH_ACK){
+				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+			}
 
 		}
 
