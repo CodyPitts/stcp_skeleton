@@ -1,6 +1,85 @@
 ================================================
  README file for Project 3 - Simple TCP
-           Name(s): 
+ Name(s): Cody Pitts, Jackson Van Dyck, 
+	  Chris Watanabe, Jacob Newberry
 ================================================
 
 DESCRIBE YOUR CODE AND DESIGN DECISIONS HERE
+
+/***********CONNECTION CONTEXT******************/
+
+Defined the fixed window size as 3072 as a global variable named bit_win.
+Added connection states CSTATE_HANDSHAKING, CSTATE_CLOSING, CSTATE_CLOSED.
+Added initial_sequence_num, curr_sequence_num, curr_ack_num as type tcp_seq. 
+	These variables track the sequence number and the acknowledgement 
+	number per each connection.
+Added congestion_win,recv_win,their_recv_win, send_win as type tcp_seq.
+	Congestion_win track the congestion window for the connection.
+	Recv_win track our receive window which is at a fixed size of 3072.
+	Their_recv_win track our peer's receive window during the connection.
+	Send_win tracks our sending window which is the min(congestion_win, their_recv_win).
+Two int pointers, named last_byte_sent and last_byte_ack, are used as endpoints for the 
+sliding window. This sliding window represents the possible sequence numbers that we might 
+be expecting from our peer.
+A tcphdr pointer is defined as hdr_buffer. This is used during network receive when we are expecting a header packet.
+A char pointer is defined as data_buffer. This is used when we are expecting to receive data from the application.
+
+/***********THREE WAY HANDSHAKE*****************/
+
+Started off with initializing variables with the context_t struct *ctx, this way we wont have any garbage 
+within our variables. 
+
+After initialization we look to see if is_active is true or false. If true, then our 
+application layer wishes to start a connection with a peer, so we create a SYN header and send it to the network layer.
+To create the SYN packet we defined a tcphdr* as synhdr, and initialize several data members. These data members include 
+th_seq, th_flags, and th_win. Th_seq represents the packets sequence number, which is type cast to network long endian form. 
+Th_flags is set to the correct flag, TH_SYN, for our SYN packet. Th_win is set to the fixed window size of bit_win, 3072,
+in proper network short endian form. After the SYN header packet is properly defined and initialized, we call stcp_network_send()
+to start our Three Way Handshake with our peer. After send the packet we update the last_byte_sent in ctx. We will be updating this
+every time we send to the network by either assigning the curr_sequence_num if we sent a header packet, exception being acknowledgement packet,
+or add the sizeof() the last data sent.
+
+Now we wait to receive a packet from our peer by calling the stcp_network_recv(). Upon receiving, we immediately update their_recv_win and 
+send_win within our context struct *ctx. 
+
+We now look at the packet flags to determine what type of packet we just received. The possible flags that we are concerned about are TH_SYN and TH_ACK.
+If we receive a packet with TH_SYN and TH_ACK, then we receive the expected packet from our peer and can continue on with the Three Way Handshake. 
+If we happen to get only a TH_SYN, then we have simultaneous SYN packets being sent from us and our peer. If either of these flags are not found then we exit.
+
+Assuming we have received the expected SYN_ACK packet from our peer, we immediately check to see if the acknowledgement sequence number, th_ack, is one more than our last
+SYN packet's sequence number. If so, we can proceed to send an ACK packet to our peer. We initialize this packet much in the same way as our previous SYN packet, but instead
+we initialize th_ack to be one more than the received SYN_ACK packet's sequence number. We also set the flag to be TH_ACK. We send off our newly constructed ACK packet to the network,
+update our connection state and start waiting for events.
+
+Go back to when we check the flags for our first received packet after we send our SYN packet. If we do not receive the expected SYN_ACK packet, 
+and instead receive a SYN packet, then we can make the assumption that simultaneous SYN packets were sent. To handle this, we create a SYN_ACK packet and send it off to our peer.
+After we wait to receive a SYN_ACK from our peer. We immediately check for the correct flag and correct sequence number. If this fails, the program exit() and connection is dropped.
+
+Now go back to when we checked is_active, if this is false then we are passively waiting for a SYN packet. Upon receive a packet, we check for the right credentials and flags. 
+We then create a SYN_ACK packet to send to our peer. Lastly we wait for an ACK packet from our peer. If this fails at any point the program exit() and drops connection, otherwise
+update the connection state and proceed to wait for events.
+ 
+/*********INITIAL SEQUENCE NUMBER***************/
+
+We seed the random number generator with time, and initialize the initial_sequence_num in *ctx with a random number between 0 and 255.
+
+/**************CONTROL LOOP*********************/
+
+The controls loop is broken into four different events, TIMEOUT(0), APP_DATA(1), NETWORK_DATA(2), and APP_CLOSE_REQUESTED(4). There is one more event, called ANY_EVENT, 
+that acts as a combination of the other events. For example, if we have an APP_DATA(1) and NETWORK_DATA(2) event, then ANY_EVENT would equate to three. With this in mind, we can figure
+out the combination of events that correlate to values of ANY_EVENT. For APP_DATA, ANY_EVENT will equal three, five, or seven. For NETWORK_DATA, ANY_EVENT will equal three, six, or seven.
+For APP_CLOSE_REQUESTED, ANY_EVENT will equal five, six, or seven. Setting it up like this, allows for the minimum amount of if statements for event checking. Since we went with this design, 
+we had to order the events and give priority to some over other. For example, APP_DATA has more priority so it will be executed before NETWORK_DATA.
+
+Within our APP_DATA event, we wait and receive data from the application layer by calling stcp_app_recv(). We save the data into a char* named data_buffer, and create a header packet for the data.
+After that, the header packet and the data packet are sent to the network layer as two different packets. We update curr_sequence_num and last_byte_sent within our *ctx. 
+
+Within our NETWORK_DATA event, we create a new buffer to accept arbitrary data. This way is we can accept a header packet, a data packet, or a combination of the two. After, we check to see what type of packet
+we received. If the packet is has a header we check for the FIN and ACK flags and respond respectfully. If the packet we received is a data packet, we see if any flags are attached to it and then send the 
+data up to the application layer.
+
+Within our APP_CLOSE_REQUESTED event, we create a FIN packet to send to the network layer.
+
+Within our TIMEOUT event, we simply print out "TIMEOUT" and exit() the program.
+
+/**************KNOWN ISSUES**********************/
