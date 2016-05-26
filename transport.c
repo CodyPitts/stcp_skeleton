@@ -358,89 +358,85 @@ static void control_loop(mysocket_t sd, context_t *ctx)
                 exit(-1);
             }
 
-		ctx->hdr_buffer = (struct tcphdr *) recvBuffer;
-		size_t hdr_size = ((struct tcphdr *)recvBuffer)->th_off * sizeof(uint32_t);
+			ctx->hdr_buffer = (struct tcphdr *) recvBuffer;
+			size_t hdr_size = ((struct tcphdr *)recvBuffer)->th_off * sizeof(uint32_t);
 
 
-		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
+			ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 		
 		//*******************CHECK FOR FIN OR ACK ONLY HEADER**********************************
-		if(receivedData == hdr_size)
-		{	
-			tcphdr *ackhdr;
-			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
-			assert(ackhdr);
-			ackhdr->th_flags = TH_ACK;
-			ackhdr->th_ack = ctx->hdr_buffer-> + 1;
-			ctx ->last_ack_num_sent = ackhdr->th_ack;
-			ackhdr->th_win = ctx->recv_win;
+			if(receivedData == hdr_size){	
+				tcphdr *ackhdr;
+				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+				assert(ackhdr);
+				ackhdr->th_flags = TH_ACK;
+				ackhdr->th_ack = ctx->hdr_buffer->th_seq + 1;
+				ctx ->last_ack_num_sent = ackhdr->th_ack;
+				ackhdr->th_win = ctx->recv_win;
 
-			//check if just an ACK, otherwise check flags and send an ACK if necessary
-			if (ctx->hdr_buffer->th_flags & TH_ACK){
-				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
-			}
-			else if(ctx->hdr_buffer->th_flags  & (TH_FIN | TH_ACK))
-			{
-				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
-				finRecv = true;
-				stcp_network_send(sd,ackhdr,sizeof(ackhdr));
-			}
-			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				finRecv = true;
-				stcp_network_send(sd,ackhdr,sizeof(ackhdr));
-			}
-		}
-		//*******************RECIEVED A DATA PACKET **********************************
-		else{
-			//See if there was an ACK or FIN
-			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
-			{
-				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
-				finRecv = true;
-			}
-			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
-			}
-			else if (ctx->hdr_buffer->th_flags & TH_ACK){
-				finRecv = true;
-			}
-
-			recvSeqNum = ctx->hdr_buffer->th_seq;
-
-			//Check to see if there was duplicate data
-			if(recvSeqNum < ctx->last_ack_num_sent)
-			{
-				//Check to see if the duplicate data is large enough that it introduces new data
-				if(recvSeqNum + (receivedData - hdr_size) > ctx-> last_ack_num_sent){
-					duplicateDataSize = (ctx->last_ack_num_sent-1) - recvSeqNum;
-					stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - (hdr_size + duplicateDataSize));
-					lastRecvNum = recvSeqNum + (receivedData - hdr_size);
+				//check if just an ACK, otherwise check flags and send an ACK if necessary
+				if (ctx->hdr_buffer->th_flags & TH_ACK){
+					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				}
+				else if(ctx->hdr_buffer->th_flags  & (TH_FIN | TH_ACK))
+				{
+					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+					finRecv = true;
+					stcp_network_send(sd,ackhdr,sizeof(ackhdr));
+				}
+				else if (ctx->hdr_buffer->th_flags & TH_ACK){
+					finRecv = true;
+					stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 				}
 			}
-			else
-			{
+		//*******************RECIEVED A DATA PACKET **********************************
+			else{
+				//See if there was an ACK or FIN
+				if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
+				{
+					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+					finRecv = true;
+				}
+				else if (ctx->hdr_buffer->th_flags & TH_ACK){
+					*ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				}
+				else if (ctx->hdr_buffer->th_flags & TH_ACK){
+					finRecv = true;
+				}
+
+				recvSeqNum = ctx->hdr_buffer->th_seq;
+
+				//Check to see if there was duplicate data
+				if(recvSeqNum < ctx->last_ack_num_sent){
+					//Check to see if the duplicate data is large enough that it introduces new data
+					if(recvSeqNum + (receivedData - hdr_size) > ctx-> last_ack_num_sent){
+						duplicateDataSize = (ctx->last_ack_num_sent-1) - recvSeqNum;
+						stcp_app_send(sd, recvBuffer+hdr_size + duplicateDataSize,receivedData - (hdr_size + duplicateDataSize));
+						lastRecvNum = recvSeqNum + (receivedData - hdr_size);
+					}
+				}
+				else{
 				//If no duplicate data, pass everything up to the application
 				stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 				lastRecvNum = recvSeqNum + (receivedData - hdr_size);
+				}
+
+				//Send an ACK based on the data recieved
+				tcphdr *ackhdr;
+				ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
+				assert(ackhdr);
+				ackhdr->th_flags = TH_ACK;
+				ackhdr->th_ack = lastRecvNum + 1;
+				ctx ->last_ack_num_sent = ackhdr->th_ack;
+				ackhdr->th_win = ctx->recv_win;
+				stcp_network_send(sd,ackhdr,sizeof(ackhdr));
 			}
-
-			//Send an ACK based on the data recieved
-			tcphdr *ackhdr;
-			ackhdr = (tcphdr *)calloc(1, sizeof(ackhdr));
-			assert(ackhdr);
-			ackhdr->th_flags = TH_ACK;
-			ackhdr->th_ack = lastRecvNum + 1;
-			ctx ->last_ack_num_sent = ackhdr->th_ack;
-			ackhdr->th_win = ctx->recv_win;
-			stcp_network_send(sd,ackhdr,sizeof(ackhdr));
-		}
-		//If we received a FIN, the peer no longer has anything to send us
-		//ACK the FIN and wait on the app to give us everything
-		if(finRecv)
-		{
-			stcp_fin_received(sd);
-		}
-
+			//If we received a FIN, the peer no longer has anything to send us
+			//ACK the FIN and wait on the app to give us everything
+			if(finRecv)
+			{
+				stcp_fin_received(sd);
+			}
 	}
 	/***********************************APP_CLOSE_REQUESTED*************************/
 	//Handle 4,5,6,7
