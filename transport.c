@@ -353,19 +353,36 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 
 		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 		
-		//*******************RECIEVED ONLY AN ACK HEADER **********************************
+		//*******************CHECK FOR FIN OR ACK ONLY HEADER**********************************
 		if(receivedData == hdr_size)
 		{
-			if (ctx->hdr_buffer->th_flags & TH_ACK){
+			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
+			{
 				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				finRecv = true;
+			}
+			else if (ctx->hdr_buffer->th_flags & TH_ACK){
+				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+			}
+			else if (ctx->hdr_buffer->th_flags & TH_ACK){
+				finRecv = true;
 			}
 		}
 		//*******************RECIEVED A DATA PACKET **********************************
 		else{
-			//see if there was an ACK
-			if (ctx->hdr_buffer->th_flags & TH_ACK){
+			//see if there was an ACK or FIN
+			if(ctx->hdr_buffer->th_flags  & (TH_SYN | TH_ACK))
+			{
+				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
+				finRecv = true;
+			}
+			else if (ctx->hdr_buffer->th_flags & TH_ACK){
 				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 			}
+			else if (ctx->hdr_buffer->th_flags & TH_ACK){
+				finRecv = true;
+			}
+
 			recvSeqNum = ctx->hdr_buffer->th_seq;
 
 			//check to see if there was duplicate data
@@ -382,8 +399,8 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 			}
 		}
-//sending shit
-//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
+		//sending shit
+		//	stcp_app_send(sd, recvBuffer+hdr_size,receivedData - hdr_size);
 
 
 
@@ -406,11 +423,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			}
 			*(ctx->last_byte_sent) = sizeof(finack) + ctx->curr_sequence_num;
 			stcp_fin_received(sd);
-		}
-		//****************RECIEVED A FIN AND AN ACK PACKET *******************************************
-		else if (ctx->hdr_buffer->th_flags & (TH_FIN | TH_ACK))
-		{
-
 		}
 		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
 		else if (!ctx->hdr_buffer->th_flags){
