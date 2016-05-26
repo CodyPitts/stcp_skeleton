@@ -321,6 +321,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			exit(-1);
 		}
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num + sizeof(*(ctx->data_buffer)) - 1;
+		ctx->curr_sequence_num = ctx->last_byte_sent +1;
 	}
 	/********************************NETWORK_DATA**********************************/
 	// handle 2,3,6,7
@@ -332,7 +333,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
-		ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
+		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
 		//*******************RECIEVED AN ACK PACKET **********************************
 		if (ctx->hdr_buffer->th_flags & TH_ACK){
 			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
@@ -360,6 +361,11 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 			}
 			*(ctx->last_byte_sent) = sizeof(finack) + ctx->curr_sequence_num;
 			stcp_fin_received(sd);
+		}
+		//****************RECIEVED A FIN AND AN ACK PACKET *******************************************
+		else if (ctx->hdr_buffer->th_flags & (TH_FIN | TH_ACK))
+		{
+
 		}
 		//******************RECIEVED A HEADER PACKET WITH NO FLAGS ONLY DATA*********************
 		else if (!ctx->hdr_buffer->th_flags){
