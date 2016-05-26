@@ -40,8 +40,8 @@ typedef struct
   tcp_seq recv_win;		  //our receive window: 3072
   tcp_seq send_win;		  //our send window: min(congestion window, their receive window) - (last byte sent - last byte ack'd)
   tcp_seq their_recv_win; //their receive window
-  int* last_byte_sent;    //the last byte we have sent
-  int* last_byte_ack;	  //the last byte ack'd by peer
+  int* last_byte_sent;    //the last byte we have sent:current sequence# -1
+  int* last_byte_ack;	  //the last byte ack'd by peer: the last th_ack -1
 
   tcphdr* hdr_buffer;
   char* data_buffer;
@@ -100,8 +100,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  dprintf("Error: stcp_network_recv()");
 	  exit(-1);
 	}
-	ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
-	ctx->send_win = std::min(ctx->their_recv_win, ctx->congestion_win);
+	ctx->their_recv_win: ntohs(ctx->hdr_buffer->th_win);
+	ctx->send_win = std::min(ctx->their_recv_win, congestion_win);
 
 	// See if packet recv is the SYN_ACK packet
 	// Bitwise and to check for both the SYN flag and ACK flag
@@ -111,7 +111,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
 		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 		ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
-		*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack; 
+		*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack - 1; 
 
 		// creating ACK header for last handshake
 		tcphdr *ackhdr;
@@ -128,7 +128,8 @@ void transport_init(mysocket_t sd, bool_t is_active)
 		  exit(-1);
 		}
 	  //if the ack number recieved is incorrect
-	  }else{
+	  }
+	  else{
 		  dprintf("Error: ACK number incorrect");
 		  exit(-1);
 	  }
@@ -143,14 +144,13 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  synack->th_ack = ctx->hdr_buffer->th_seq+1;
 	  // Sliding window calculation 
 	  ctx->curr_ack_num = synack->th_ack;
-	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->their,recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 
 	  synack->th_win = htons(bit_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
 		exit(-1);
 	  }
-	  *(ctx->last_byte_sent) = ctx->curr_sequence_num;
 
 	  //Wait on SYN ACK with our SEQ number +1 and their SEQ number again
 	  if ((stcp_network_recv(sd, (void*)ctx->hdr_buffer, ctx->recv_win))
@@ -162,19 +162,24 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  if (ctx->hdr_buffer->th_flags & (TH_SYN | TH_ACK)){
 	  	//check to see if ACK is  correct
 	  	if (ctx->hdr_buffer->th_ack == synhdr->th_seq + 1){
+	  		*(ctx->last_byte_sent) = ctx->curr_sequence_num;
 			ctx->curr_sequence_num = ctx->hdr_buffer->th_ack;
 			ctx->curr_ack_num = ctx->hdr_buffer->th_seq + 1;
 			*(ctx->last_byte_ack) = ctx->hdr_buffer->th_ack;
 	    }
+	    //if ack is incorrect
+	    else{
+	    	dprintf("Error: wrong Ack number");
+	   		exit(-1);
+	    }
 	  }
 	  //if not SYN ACK after simultaneous SYN's
-	  else
-	  {
+	  else {
 	  	dprintf("Error: wrong flags");
 	    exit(-1);
 	  }
 	}
-	//If not SYN ACK or SYN
+	//If not SYN ACK or SYN received
 	else {
 	  dprintf("Error: wrong flags");
 	  exit(-1);
@@ -198,7 +203,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  // Sliding window calculations
 	  ctx->curr_ack_num = synack->th_ack;
 	  ctx->recv_win = bit_win;
-	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
+	  ctx->send_win = std::min(ctx->congestion_win, ctx->their_recv_win) - (ctx->last_byte_sent - ctx->last_byte_ack);
 	  synack->th_win = htons(ctx->recv_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr),NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
