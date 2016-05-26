@@ -286,7 +286,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
     assert(ctx);
     assert(!ctx->done);
     assert(ctx->hdr_buffer);
-    ctx->data_buffer = (char*)calloc(1, sizeof(char*));
+    ctx->data_buffer = (char*)calloc(1, sizeof(bit_win));
     assert(ctx->data_buffer);
     //timespec *abstime;
     //abstime= (timespec*)malloc(sizeof(timespec*));
@@ -303,10 +303,10 @@ static void control_loop(mysocket_t sd, context_t *ctx)
         /* see stcp_api.h or stcp_api.c for details of this function */
         /* XXX: you will need to change some of these arguments! */
         if (finSent){
-    		event = stcp_wait_for_event(sd, 7, NULL);
+    		event = stcp_wait_for_event(sd, ANY_EVENT, NULL);
         }
         else{
-        	event = stcp_wait_for_event(sd, 7, NULL);
+        	event = stcp_wait_for_event(sd, ANY_EVENT, NULL);
         }
 	 	if (event & TIMEOUT)
         {
@@ -336,7 +336,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
             //Here need to convert multi byte data being sent with htons (dbuffer)
 
             datahdr->th_win = htons(bit_win);
-            if (stcp_network_send(sd, datahdr, sizeof(tcphdr), *(ctx->data_buffer), sizeof(*(ctx->data_buffer)), NULL) == -1){
+            if (stcp_network_send(sd, datahdr, sizeof(tcphdr), (void *)(ctx->data_buffer), sizeof(tcphdr), NULL) == -1){
             	dprintf("Error: stcp_network_send()");
             	exit(-1);
             }
