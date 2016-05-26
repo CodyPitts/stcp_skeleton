@@ -133,6 +133,7 @@ void transport_init(mysocket_t sd, bool_t is_active)
 	  // Sliding window calculation maybe
 	  ctx->curr_ack_num = synack->th_ack;
 	  ctx->send_win = std::min(ctx->congestion_win, ctx->recv_win) + ctx->last_byte_sent - ctx->last_byte_ack + 1;
+
 	  synack->th_win = htons(bit_win);
 	  if ((stcp_network_send(sd, synack, sizeof(tcphdr), NULL)) == -1){
 		dprintf("Error: stcp_network_send()");
