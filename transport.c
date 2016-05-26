@@ -279,7 +279,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
   assert(ctx->hdr_buffer);
   ctx->data_buffer = (char*)calloc(1, sizeof(char*));
   assert(ctx->data_buffer);
-  
+
   while (!ctx->done){
 	unsigned int event;
 	
@@ -327,21 +327,39 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 	// handle 2,3,6,7
 	if ((event & NETWORK_DATA) || ((event & ANY_EVENT) == (3 | 6 | 7)))
 	{
-		// Read in packet hdr from network
-		//We receive the packet but it probably needs to go to ntohs
-		if (stcp_network_recv(sd, ctx->hdr_buffer, sizeof(ctx->hdr_buffer)) == -1){
+		void* recvBuffer;
+        size_t receivedData;
+		int max_send_window = std::min(ctx->their_recv_win, ctx->congestion_win); 
+		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
+		recvBuffer = malloc(max_send_window - data_in_flight);
+		receivedData = stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) ;
+		if (receivedData == (size_t)-1){
 			dprintf("Error: stcp_network_recv()");
 			exit(-1);
 		}
+
+		ctx->hdr_buffer = struct tcphdr * receivedData;
+		size_t hdr_size = ((struct tcphdr *)dst)->th_off * sizeof(uint32_t);
+
+
 		ctx->their_recv_win = ntohs(ctx->hdr_buffer->th_win);
-		//*******************RECIEVED AN ACK PACKET **********************************
-		if (ctx->hdr_buffer->th_flags & TH_ACK){
-			ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;	
-			if (stcp_network_recv(sd, ctx->data_buffer, sizeof(ctx->data_buffer)) == -1){
-				dprintf("Error: stcp_network_recv()");
-				exit(-1);
+		
+		//*******************RECIEVED ONLY AN ACK HEADER **********************************
+		if(receivedData == hdr_size)
+		{
+			if (ctx->hdr_buffer->th_flags & TH_ACK){
+				ctx->last_byte_ack = ctx->hdr_buffer->th_ack-1;
 			}
 		}
+		//*******************RECIEVED A DATA PACKET **********************************
+		else{
+
+
+		}
+
+
+
+
 		//****************RECIEVED A FIN PACKET *******************************************
 		else if (ctx->hdr_buffer->th_flags & TH_FIN)
 		{
@@ -375,7 +393,6 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 				exit(-1);
 			}
 			ctx->recv_win = ntohs(ctx->hdr_buffer->th_win);
-
 		}
 
 		// Pass data to application layer
