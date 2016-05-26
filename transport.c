@@ -285,7 +285,7 @@ static void control_loop(mysocket_t sd, context_t *ctx)
 		// Sliding window calculations
 		int max_send_window = std::min(ctx->hdr_buffer->th_win, (uint16_t)ctx->congestion_win); //CODY: error: no matching function for call to 'min(uint16_t&, tcp_seq&)'
 		int data_in_flight = *(ctx->last_byte_sent) - *(ctx->last_byte_ack);
-		if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == -1){
+		if (stcp_app_recv(sd, ctx->data_buffer, (max_send_window - data_in_flight) - 1) == (size_t)-1){
 			dprintf("Error: stcp_app_recv()");
 			exit(-1);
 		}
